@@ -1,0 +1,105 @@
+/* Google Fonts — doit être en tête avant toute autre règle */
+@import url('https://fonts.googleapis.com/css2?family=Piazzolla:opsz,wght@8..30,400;8..30,500;8..30,600;8..30,700&family=Inter:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #171310;
+  --color-inkmute: #171310B3;
+  --color-brown: #5C3A21;
+  --color-brown-dark: #3B2313;
+  --color-brown-light: #8B5E3C;
+  --color-bgsoft: #F5F4F2;
+  --color-border-light: #E5E5E3;
+  --color-field: #EEEEED;
+  --color-sidebar: #1d1d1d;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Piazzolla', ui-serif, Georgia, serif;
+}
+
+/* Police Google Fonts — déjà importée en tête de fichier */
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: #fff; color: #171310; font-family: 'Inter', sans-serif; }
+button, a { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+h1, h2, h3, .font-display { font-family: 'Piazzolla', serif; }
+input::placeholder { color: #A7A7A7; opacity: 1; }
+input:focus { outline: none; }
+select { appearance: none; -webkit-appearance: none; }
+
+/* Fence-rule (landing page) */
+.fence-rule {
+  height: 14px;
+  background-image:
+    linear-gradient(#5C3A21 2px, transparent 2px),
+    linear-gradient(90deg, transparent 0, transparent calc(100% - 2px), #17131022 100%);
+  background-size: 100% 2px, 40px 100%;
+  background-position: top, top;
+  background-repeat: repeat-x, repeat-x;
+  opacity: 0.9;
+}
+.fence-post {
+  background-image: repeating-linear-gradient(90deg, #17131026 0 2px, transparent 2px 40px);
+}
+
+/* Animation reveal */
+.reveal {
+  animation: rise .7s cubic-bezier(.22,.61,.36,1) both;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Donut chart dashboard */
+.donut {
+  width: 169px; height: 169px; border-radius: 50%;
+  background: conic-gradient(
+    #000000 0deg 142.9deg,
+    #5C3A21 142.9deg 246.3deg,
+    #ae947c 246.3deg 324.7deg,
+    #ded9d3 324.7deg 360deg
+  );
+  position: relative;
+}
+.donut::after {
+  content: "";
+  position: absolute;
+  width: 67px; height: 67px;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: white;
+}
+
+/* Bar chart grid */
+.chart-grid {
+  background-image: linear-gradient(to bottom,
+    transparent 24.5%, #eeeeee 25%, transparent 25.5%,
+    transparent 49.5%, #eeeeee 50%, transparent 50.5%,
+    transparent 74.5%, #eeeeee 75%, transparent 75.5%
+  );
+}
+
+/* Timeline */
+.timeline-line {
+  position: absolute; left: 6px; top: 8px; bottom: 8px;
+  width: 1px; background: #E5E5E3;
+}
+.timeline-dot {
+  position: absolute; left: 3px; top: 4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #5C3A21; border: 2px solid #fff;
+  z-index: 1;
+}
+.timeline-dot-info { background: #8B5E3C; }
+
+/* Mobile menu transition */
+#mobile-menu { transition: max-height .25s ease, opacity .2s ease; overflow: hidden; }
