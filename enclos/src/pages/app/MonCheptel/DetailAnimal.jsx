@@ -145,6 +145,15 @@ export default function DetailAnimal() {
     }
   }
 
+  async function handleMarkAlerteLue(alerteId) {
+    try {
+      const updated = await api.updateAlerte(alerteId, { statut: 'lue' });
+      setAlertes(prev => prev.map(a => a.id === alerteId ? updated : a));
+    } catch (err) {
+      setError(err.message || 'Impossible de marquer l’alerte comme lue.');
+    }
+  }
+
   const a     = animal;
   const label = a ? (a.nom?.trim() ? a.nom : a.numero_identification) : '…';
   const age   = a ? calcAge(a.date_naissance) : null;
@@ -208,6 +217,11 @@ export default function DetailAnimal() {
                     </span>
                   </div>
                   <p className="mt-2 text-[13px] leading-relaxed text-[#171310]/70">{al.message}</p>
+                  {['non_lue', 'Non lue'].includes(al.statut) && (
+                    <button onClick={() => handleMarkAlerteLue(al.id)} className="mt-3 text-[11px] font-medium text-[#5C3A21] hover:underline">
+                      Marquer comme lu
+                    </button>
+                  )}
                 </div>
               );
             })}

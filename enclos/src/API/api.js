@@ -12,6 +12,7 @@ const HISTORIQUE_URL = `${API_BASE}/api/historiques`;
 const GESTATION_URL = `${API_BASE}/api/gestations`;
 const SANTE_URL = `${API_BASE}/api/sante`;
 const ALERTES_URL = `${API_BASE}/api/alertes`;
+const IA_URL = `${API_BASE}/api/ia`;
 
 function getStoredToken() {
   return localStorage.getItem('enclos_access_token') || '';
@@ -97,6 +98,7 @@ export const api = {
   GESTATION_URL,
   SANTE_URL,
   ALERTES_URL,
+  IA_URL,
 
   setToken(token) {
     if (token) {
@@ -470,6 +472,30 @@ export const api = {
     return request(`${ALERTES_URL}/`, {
       method: 'GET',
       token: getStoredToken(),
+    });
+  },
+
+  async updateAlerte(id, payload) {
+    return request(`${ALERTES_URL}/${id}/`, {
+      method: 'PATCH',
+      token: getStoredToken(),
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getPredictions(animalId = null) {
+    const suffix = animalId ? `/?animal=${encodeURIComponent(animalId)}` : '/';
+    return request(`${IA_URL}/predictions${suffix}`, {
+      method: 'GET',
+      token: getStoredToken(),
+    });
+  },
+
+  async predireAnimal({ animal_id, alimentation_id = null }) {
+    return request(`${IA_URL}/predire/`, {
+      method: 'POST',
+      token: getStoredToken(),
+      body: JSON.stringify({ animal_id, alimentation_id, declencheur: 'manuel' }),
     });
   },
 

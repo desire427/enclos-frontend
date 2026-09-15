@@ -27,6 +27,8 @@ function normalize(a) {
     message:   a.message || '',
     conseil:   a.conseil || a.recommendation || '',
     statut:    a.statut || 'lue',
+    animalIdentification: a.animal_identification || a.animal?.numero_identification || '',
+    animalNom: a.animal_nom || a.animal?.nom || '',
   };
 }
 
@@ -132,6 +134,13 @@ export default function AlertesPanel({ open, onClose, alertes, onMarkOne, onMark
                         <p className="text-[13px] font-medium text-[#171310] leading-snug">
                           {a.message}
                         </p>
+
+                        {a.animalIdentification && (
+                          <p className="mt-1 text-[11px] text-[#171310]/50">
+                            Animal : <span className="font-semibold text-[#171310]/70">{a.animalIdentification}</span>
+                            {a.animalNom ? ` — ${a.animalNom}` : ''}
+                          </p>
+                        )}
 
                         {a.conseil && (
                           <div className="mt-1.5 flex items-start gap-1.5">

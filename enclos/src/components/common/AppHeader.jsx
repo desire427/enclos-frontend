@@ -22,12 +22,26 @@ export default function AppHeader() {
 
   const nonLues = alertes.filter(a => a.statut === 'non_lue' || a.statut === 'Non lue').length;
 
-  function handleMarkOne(id) {
-    setAlertes(prev => prev.map(a => a.id === id ? { ...a, statut: 'lue' } : a));
+  async function handleMarkOne(id) {
+    try {
+      const updated = await api.updateAlerte(id, { statut: 'lue' });
+      setAlertes(prev => prev.map(a => a.id === id ? updated : a));
+    } catch (err) {
+      setError(err.message || 'Impossible de mettre à jour l’alerte.');
+    }
   }
 
-  function handleMarkAll() {
-    setAlertes(prev => prev.map(a => ({ ...a, statut: 'lue' })));
+  async function handleMarkAll() {
+    const nonLuesIds = alertes
+      .filter(a => a.statut === 'non_lue' || a.statut === 'Non lue')
+      .map(a => a.id);
+    try {
+      const updated = await Promise.all(nonLuesIds.map(id => api.updateAlerte(id, { statut: 'lue' })));
+      const byId = new Map(updated.map(a => [a.id, a]));
+      setAlertes(prev => prev.map(a => byId.get(a.id) || a));
+    } catch (err) {
+      setError(err.message || 'Impossible de mettre à jour les alertes.');
+    }
   }
 
   return (

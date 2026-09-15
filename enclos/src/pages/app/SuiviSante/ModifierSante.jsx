@@ -31,6 +31,9 @@ export default function ModifierSante() {
   const [statut,      setStatut]      = useState(statutFromURL || 'Malade');
   const [dateDebut,   setDateDebut]   = useState('');
   const [dateProchain,setDateProchain]= useState('');
+  const [poidsKg,     setPoidsKg]     = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [frequenceCardiaque, setFrequenceCardiaque] = useState('');
   const [note,        setNote]        = useState('');
   const [animalLabel, setAnimalLabel] = useState('');
 
@@ -48,6 +51,9 @@ export default function ModifierSante() {
         setStatut(data.statut || 'Malade');
         setDateDebut(data.date_debut || '');
         setDateProchain(data.date_prochaine_consultation || '');
+        setPoidsKg(data.poids_kg ?? '');
+        setTemperature(data.temperature_celsius ?? '');
+        setFrequenceCardiaque(data.frequence_cardiaque ?? '');
         setNote(data.note || data.notes || '');
         setAnimalLabel(data.animal_nom || data.animal_id || '');
       } catch (err) {
@@ -66,6 +72,9 @@ export default function ModifierSante() {
         statut,
         date_debut:                   dateDebut    || null,
         date_prochaine_consultation:  dateProchain || null,
+        poids_kg:                     poidsKg === '' ? null : Number(poidsKg),
+        temperature_celsius:          temperature === '' ? null : Number(temperature),
+        frequence_cardiaque:          frequenceCardiaque === '' ? null : Number(frequenceCardiaque),
         note,
         ...(isNew ? { animal: Number(animalId) } : {}),
       };
@@ -165,6 +174,25 @@ export default function ModifierSante() {
             Prochaine consultation <span className="text-[#171310]/40 font-normal">(optionnel)</span>
           </label>
           <input type="date" value={dateProchain} onChange={e => setDateProchain(e.target.value)} className={inputCls} />
+        </div>
+
+        <div className="mt-6">
+          <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">Mesures pour l’analyse IA</p>
+          <p className="-mt-2 mb-4 text-[12px] text-[#171310]/50">Facultatives, mais nécessaires pour une prédiction fiable et la comparaison avec l’historique.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[13px] font-semibold text-[#171310] mb-2">Poids (kg)</label>
+              <input type="number" min="0" step="0.1" value={poidsKg} onChange={e => setPoidsKg(e.target.value)} placeholder="Ex: 54.5" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold text-[#171310] mb-2">Température (°C)</label>
+              <input type="number" min="0" step="0.1" value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="Ex: 39.1" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold text-[#171310] mb-2">Fréquence cardiaque</label>
+              <input type="number" min="0" step="1" value={frequenceCardiaque} onChange={e => setFrequenceCardiaque(e.target.value)} placeholder="bpm" className={inputCls} />
+            </div>
+          </div>
         </div>
 
         <div className="mt-4">
