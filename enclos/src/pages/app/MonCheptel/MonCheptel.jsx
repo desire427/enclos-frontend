@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, PawPrint, Activity, Plus } from 'lucide-react';
+import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../../../API/api';
 import FilterDropdown from '../../../components/common/FilterDropdown';
 
@@ -24,6 +24,8 @@ const SANTE_LABEL = {
   en_traitement: 'En traitement',
 };
 
+const PAGE_SIZE = 10;
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */
 /* ------------------------------------------------------------------ */
@@ -38,9 +40,10 @@ export default function MonCheptel() {
   const [animals, setAnimals]         = useState([]);
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState('');
+  const [page, setPage]               = useState(1);
 
   /* Filtres */
-  const [search, setSearch]           = useState('');
+  const [search, setSearch]                 = useState('');
   const [filtreEspece, setFiltreEspece]     = useState('Toutes');
   const [filtrePresence, setFiltrePresence] = useState('Tous');
   const [filtreSante, setFiltreSante]       = useState('Tous');
@@ -60,6 +63,8 @@ export default function MonCheptel() {
     load();
   }, []);
 
+  function resetPage() { setPage(1); }
+
   /* ── Filtrage ── */
   const filtered = animals.filter(a => {
     const label = animalLabel(a).toLowerCase();
@@ -67,7 +72,10 @@ export default function MonCheptel() {
       label.includes(search.toLowerCase()) ||
       (a.numero_identification || '').toLowerCase().includes(search.toLowerCase());
 
-    const matchEspece = filtreEspece === 'Toutes' || a.espece === filtreEspece;
+    // La valeur en DB est en minuscule (bovin, ovin…), le filtre est en capitalisé
+    const matchEspece = filtreEspece === 'Toutes' ||
+      (a.espece || '').toLowerCase() === filtreEspece.toLowerCase();
+
     const presenceValue = PRESENCE_LABEL[a.presence] || PRESENCE_LABEL.present;
     const santeValue = SANTE_LABEL[a.etat_sante] || SANTE_LABEL.sain;
 
@@ -76,6 +84,11 @@ export default function MonCheptel() {
 
     return matchSearch && matchEspece && matchPresence && matchSante;
   });
+
+  /* ── Pagination ── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <>
@@ -98,14 +111,13 @@ export default function MonCheptel() {
 
       {/* ── Filtres ── */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Recherche texte */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/40" />
           <input
             type="text"
             placeholder="Rechercher par ID ou nom..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); resetPage(); }}
             className="h-9 w-[260px] rounded-lg border border-[#E5E5E3] bg-white pl-9 pr-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
         </div>
@@ -115,21 +127,21 @@ export default function MonCheptel() {
           label="Espèce"
           options={ESPECES}
           value={filtreEspece}
-          onChange={setFiltreEspece}
+          onChange={v => { setFiltreEspece(v); resetPage(); }}
         />
         <FilterDropdown
           icon={Activity}
           label="Présence"
           options={PRESENCES}
           value={filtrePresence}
-          onChange={setFiltrePresence}
+          onChange={v => { setFiltrePresence(v); resetPage(); }}
         />
         <FilterDropdown
           icon={Activity}
           label="Santé"
           options={SANTES}
           value={filtreSante}
-          onChange={setFiltreSante}
+          onChange={v => { setFiltreSante(v); resetPage(); }}
         />
       </div>
 
@@ -156,28 +168,28 @@ export default function MonCheptel() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((a, i) => (
-                  <tr key={a.id} className={`h-12 ${i < filtered.length - 1 ? 'border-b border-[#E5E5E3]' : ''}`}>
+                paginated.map((a, i) => (
+                  <tr key={a.id} className={`h-12 ${i < paginated.length - 1 ? 'border-b border-[#E5E5E3]' : ''}`}>
                     <td className="px-4 text-[13px] font-medium text-[#171310] whitespace-nowrap">
                       {animalLabel(a)}
                       {a.nom?.trim() && (
                         <span className="ml-1.5 text-[11px] text-[#171310]/40 font-normal">({a.numero_identification})</span>
                       )}
                     </td>
-                    <td className="px-3 text-[13px] text-[#171310]/70">{a.espece}</td>
-                    <td className="px-3 text-[13px] text-[#171310]/70">{a.sexe}</td>
+                    <td className="px-3 text-[13px] text-[#171310]/70">{a.espece_display || a.espece}</td>
+                    <td className="px-3 text-[13px] text-[#171310]/70">{a.sexe_display || a.sexe}</td>
                     <td className="px-3 text-[13px] text-[#171310]/70">{a.date_naissance || '—'}</td>
                     <td className="px-3 text-[13px] text-[#171310]/70">{a.poids_naissance || '—'}</td>
                     <td className="px-3">
                       <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-medium
                         ${a.presence === 'vendu' ? 'bg-amber-50 text-amber-700' : a.presence === 'mort' ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>
-                        {a.presence_display || (a.presence === 'vendu' ? 'Vendu' : a.presence === 'mort' ? 'Mort' : 'Présent')}
+                        {a.presence_display || PRESENCE_LABEL[a.presence] || 'Présent'}
                       </span>
                     </td>
                     <td className="px-3">
                       <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-medium
                         ${a.etat_sante === 'malade' ? 'bg-red-50 text-red-600' : a.etat_sante === 'en_traitement' ? 'bg-orange-50 text-orange-600' : a.etat_sante === 'gestation' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                        {a.etat_sante_display || (a.etat_sante === 'malade' ? 'Malade' : a.etat_sante === 'en_traitement' ? 'En traitement' : a.etat_sante === 'gestation' ? 'Gestation' : 'Sain')}
+                        {a.etat_sante_display || SANTE_LABEL[a.etat_sante] || 'Sain'}
                       </span>
                     </td>
                     <td className="px-3 text-[12px] whitespace-nowrap">
@@ -195,11 +207,24 @@ export default function MonCheptel() {
         <div className="h-14 border-t border-[#E5E5E3] flex items-center justify-between px-4">
           <span className="text-[12px] text-[#171310]/50">
             {filtered.length} animal{filtered.length > 1 ? 'x' : ''}
-            {animals.length !== filtered.length && ` sur ${animals.length}`}
+            {animals.length !== filtered.length ? ` sur ${animals.length}` : ''}
+            {totalPages > 1 ? ` — page ${safePage}/${totalPages}` : ''}
           </span>
           <div className="flex items-center gap-2">
-            <button disabled className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-4 text-[13px] text-[#171310]/30 cursor-not-allowed">Précédent</button>
-            <button disabled className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-4 text-[13px] text-[#171310]/30 cursor-not-allowed">Suivant</button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310]/70 hover:bg-[#F5F4F2] disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Précédent
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310]/70 hover:bg-[#F5F4F2] disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-colors"
+            >
+              Suivant <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

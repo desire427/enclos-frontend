@@ -22,6 +22,10 @@ function getStoredRefreshToken() {
   return localStorage.getItem('enclos_refresh_token') || '';
 }
 
+function getStoredFermeId() {
+  return localStorage.getItem('enclos_ferme_id') || '';
+}
+
 async function refreshAccessToken() {
   const refresh = getStoredRefreshToken();
   if (!refresh) return '';
@@ -41,10 +45,13 @@ async function refreshAccessToken() {
 }
 
 function authHeaders(token) {
+  const fermeId = getStoredFermeId();
   return {
     Accept: 'application/json',
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // X-Ferme-Id uniquement pour les requêtes authentifiées
+    ...(token && fermeId ? { 'X-Ferme-Id': fermeId } : {}),
   };
 }
 
@@ -108,6 +115,23 @@ export const api = {
     }
   },
 
+  setActiveFarm(fermeId, fermeNom) {
+    if (fermeId) {
+      localStorage.setItem('enclos_ferme_id', String(fermeId));
+      localStorage.setItem('enclos_ferme_nom', fermeNom || '');
+    } else {
+      localStorage.removeItem('enclos_ferme_id');
+      localStorage.removeItem('enclos_ferme_nom');
+    }
+  },
+
+  getActiveFarm() {
+    return {
+      id: localStorage.getItem('enclos_ferme_id') || '',
+      nom: localStorage.getItem('enclos_ferme_nom') || '',
+    };
+  },
+
   hasSession() {
     return Boolean(getStoredToken() || getStoredRefreshToken());
   },
@@ -115,9 +139,11 @@ export const api = {
   clearToken() {
     localStorage.removeItem('enclos_access_token');
     localStorage.removeItem('enclos_refresh_token');
+    localStorage.removeItem('enclos_ferme_id');
+    localStorage.removeItem('enclos_ferme_nom');
   },
 
-  async login({ username, password }) {
+  async login({ username, password, nom_ferme }) {
     const payload = await request(`${AUTH_URL}/token/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -127,6 +153,34 @@ export const api = {
     if (payload?.access) {
       this.setToken(payload.access);
       if (payload.refresh) localStorage.setItem('enclos_refresh_token', payload.refresh);
+
+      // Sélectionner la ferme correspondant au nom saisi
+      if (nom_ferme && nom_ferme.trim()) {
+        try {
+          const farms = await request(`${API_BASE}/api/fermes/`, {
+            method: 'GET',
+            token: payload.access,
+          });
+          const list = Array.isArray(farms) ? farms : [];
+          const match = list.find(f => f.nom.trim().toLowerCase() === nom_ferme.trim().toLowerCase());
+          const chosen = match || list[0];
+          if (chosen) {
+            this.setActiveFarm(chosen.id, chosen.nom);
+          }
+        } catch (_) {
+          // Ne pas bloquer la connexion si la récupération des fermes échoue
+        }
+      } else {
+        // Pas de nom de ferme précisé → prendre la première ferme
+        try {
+          const farms = await request(`${API_BASE}/api/fermes/`, {
+            method: 'GET',
+            token: payload.access,
+          });
+          const list = Array.isArray(farms) ? farms : [];
+          if (list[0]) this.setActiveFarm(list[0].id, list[0].nom);
+        } catch (_) {}
+      }
     }
 
     return payload;

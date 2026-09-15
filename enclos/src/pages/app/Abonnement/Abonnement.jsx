@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   CreditCard, Calendar, Clock, Download, AlertCircle,
   CheckCircle, ArrowUpRight, RefreshCw,
@@ -7,6 +7,7 @@ import {
 import api from '../../../API/api';
 
 export default function Abonnement() {
+  const navigate = useNavigate();
   const [showCancel, setShowCancel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState(null);
@@ -125,7 +126,11 @@ export default function Abonnement() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <button type="button" className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors">
+            <button
+              type="button"
+              onClick={() => navigate('/paiement', { state: { selectedPlan: subscription?.plan || plan?.id } })}
+              className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors"
+            >
               <RefreshCw className="w-4 h-4 stroke-[1.8]" /> Renouveler
             </button>
             <button type="button" onClick={() => setShowCancel(true)} className="h-9 rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F5F4F2] text-[#171310]/70 px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors">

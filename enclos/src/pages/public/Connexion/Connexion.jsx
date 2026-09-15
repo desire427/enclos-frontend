@@ -9,6 +9,7 @@ export default function Connexion() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
+  const [farmName, setFarmName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,7 @@ export default function Connexion() {
     setLoading(true);
 
     try {
-      const payload = await api.login({ username, password });
+      const payload = await api.login({ username, password, nom_ferme: farmName });
       if (payload?.access) {
         api.setToken(payload.access);
         navigate('/dashboard');
@@ -71,6 +72,8 @@ export default function Connexion() {
                   id="farm"
                   type="text"
                   placeholder="Bergerie du Baobab"
+                  value={farmName}
+                  onChange={e => setFarmName(e.target.value)}
                   className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                 />
               </div>

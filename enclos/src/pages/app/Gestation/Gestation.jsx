@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Baby, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Search, Plus, Baby, Calendar, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../../../API/api';
 import FilterDropdown from '../../../components/common/FilterDropdown';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                            */
 /* ------------------------------------------------------------------ */
-const ESPECES = ['Toutes', 'Bovin', 'Ovin', 'Caprin', 'Porcin'];
-const STATUTS = ['Tous', 'En cours', 'Imminente', 'Terminée'];
+const ESPECES   = ['Toutes', 'Bovin', 'Ovin', 'Caprin', 'Porcin'];
+const STATUTS   = ['Tous', 'En cours', 'Imminente', 'Terminée'];
+const PAGE_SIZE = 10;
 
 const STATUT_BADGE = {
   'En cours':  'bg-blue-50 text-blue-700',
@@ -20,16 +21,29 @@ const STATUT_BADGE = {
 /* Helpers                                                              */
 /* ------------------------------------------------------------------ */
 function normalize(g) {
+  // Déduire le statut depuis les champs du backend si pas de statut textuel
+  let statut = g.statut || '';
+  if (statut === 'active') statut = 'En cours';
+  else if (statut === 'terminee' || statut === 'terminée') statut = 'Terminée';
+
+  const datePrevue = g.date_prevue || g.date_mise_bas_prevue || '';
+  const joursRestants = Number(g.jours_restants ?? g.joursRestants ?? 0);
+  if (!statut || statut === 'active') {
+    if (joursRestants <= 30 && joursRestants > 0) statut = 'Imminente';
+    else if (joursRestants <= 0 && datePrevue) statut = 'Terminée';
+    else statut = 'En cours';
+  }
+
   return {
     id:             g.id,
     animalId:       g.animal_id || g.animal || String(g.id),
     animalNom:      g.animal_nom || g.nom_animal || '',
     espece:         g.espece || g.species || '',
-    dateSaillie:    g.date_saillie || g.date_accouplement || '',
-    datePrevue:     g.date_prevue || g.date_mise_bas_prevue || '',
-    joursRestants:  Number(g.jours_restants  ?? g.joursRestants  ?? 0),
-    dureeGestation: Number(g.duree_gestation ?? g.dureeGestation ?? 1),
-    statut:         g.statut || 'En cours',
+    dateSaillie:    g.date_debut || g.date_saillie || g.date_accouplement || '',
+    datePrevue,
+    joursRestants,
+    dureeGestation: Number(g.duree_jours ?? g.duree_gestation ?? g.dureeGestation ?? 1),
+    statut,
     pere:           g.pere || g.male_id || '—',
     note:           g.note || g.notes || '',
   };
@@ -68,6 +82,7 @@ export default function Gestation() {
   const [search, setSearch]                 = useState('');
   const [filtreEspece, setFiltreEspece]     = useState('Toutes');
   const [filtreStatut, setFiltreStatut]     = useState('Tous');
+  const [page, setPage]                     = useState(1);
 
   useEffect(() => {
     async function load() {
@@ -84,6 +99,8 @@ export default function Gestation() {
     load();
   }, []);
 
+  function resetPage() { setPage(1); }
+
   const actives    = gestations.filter(g => g.statut !== 'Terminée').length;
   const imminentes = gestations.filter(g => g.statut === 'Imminente').length;
   const terminees  = gestations.filter(g => g.statut === 'Terminée').length;
@@ -91,10 +108,17 @@ export default function Gestation() {
   const filtered = gestations.filter(g => {
     const matchSearch = animalLabel(g).toLowerCase().includes(search.toLowerCase()) ||
                         g.animalId.toLowerCase().includes(search.toLowerCase());
-    const matchEspece = filtreEspece === 'Toutes' || g.espece === filtreEspece;
-    const matchStatut = filtreStatut === 'Tous'   || g.statut === filtreStatut;
+    // Comparaison insensible à la casse : DB stocke 'bovin', filtre affiche 'Bovin'
+    const matchEspece = filtreEspece === 'Toutes' ||
+      (g.espece || '').toLowerCase() === filtreEspece.toLowerCase();
+    const matchStatut = filtreStatut === 'Tous' || g.statut === filtreStatut;
     return matchSearch && matchEspece && matchStatut;
   });
+
+  /* ── Pagination ── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <>
@@ -119,9 +143,9 @@ export default function Gestation() {
       {/* ── KPI ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'Gestations actives', value: actives,    icon: Baby,          accent: false },
-          { label: 'Imminentes (≤ 30j)', value: imminentes, icon: AlertTriangle,  accent: true  },
-          { label: 'Terminées ce mois',  value: terminees,  icon: CheckCircle,   accent: false },
+          { label: 'Gestations actives', value: actives,    icon: Baby,         accent: false },
+          { label: 'Imminentes (≤ 30j)', value: imminentes, icon: AlertTriangle, accent: true  },
+          { label: 'Terminées',          value: terminees,  icon: CheckCircle,  accent: false },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -143,12 +167,22 @@ export default function Gestation() {
             type="text"
             placeholder="Rechercher un animal..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); resetPage(); }}
             className="h-9 w-[240px] rounded-lg border border-[#E5E5E3] bg-white pl-9 pr-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
         </div>
-        <FilterDropdown label="Espèce" options={ESPECES} value={filtreEspece} onChange={setFiltreEspece} />
-        <FilterDropdown label="Statut" options={STATUTS} value={filtreStatut} onChange={setFiltreStatut} />
+        <FilterDropdown
+          label="Espèce"
+          options={ESPECES}
+          value={filtreEspece}
+          onChange={v => { setFiltreEspece(v); resetPage(); }}
+        />
+        <FilterDropdown
+          label="Statut"
+          options={STATUTS}
+          value={filtreStatut}
+          onChange={v => { setFiltreStatut(v); resetPage(); }}
+        />
       </div>
 
       {/* ── Tableau ── */}
@@ -171,11 +205,13 @@ export default function Gestation() {
                       : 'Aucun résultat pour ces filtres.'}
                   </td>
                 </tr>
-              ) : filtered.map((g, i, arr) => (
-                <tr key={g.id} className={`h-14 ${i < arr.length - 1 ? 'border-b border-[#E5E5E3]' : ''}`}>
+              ) : paginated.map((g, i) => (
+                <tr key={g.id} className={`h-14 ${i < paginated.length - 1 ? 'border-b border-[#E5E5E3]' : ''}`}>
                   <td className="px-4 text-[13px] font-medium text-[#171310] whitespace-nowrap">
                     {animalLabel(g)}
-                    {g.animalNom?.trim() && <span className="ml-1.5 text-[11px] text-[#171310]/40 font-normal">({g.animalId})</span>}
+                    {g.animalNom?.trim() && (
+                      <span className="ml-1.5 text-[11px] text-[#171310]/40 font-normal">({g.animalId})</span>
+                    )}
                   </td>
                   <td className="px-3 text-[13px] text-[#171310]/70">{g.espece}</td>
                   <td className="px-3 text-[13px] text-[#171310]/70">{g.dateSaillie}</td>
@@ -207,11 +243,24 @@ export default function Gestation() {
         <div className="h-14 border-t border-[#E5E5E3] flex items-center justify-between px-4">
           <span className="text-[12px] text-[#171310]/50">
             {filtered.length} gestation{filtered.length > 1 ? 's' : ''}
-            {gestations.length !== filtered.length && ` sur ${gestations.length}`}
+            {gestations.length !== filtered.length ? ` sur ${gestations.length}` : ''}
+            {totalPages > 1 ? ` — page ${safePage}/${totalPages}` : ''}
           </span>
           <div className="flex items-center gap-2">
-            <button disabled className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-4 text-[13px] text-[#171310]/30 cursor-not-allowed">Précédent</button>
-            <button disabled className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-4 text-[13px] text-[#171310]/30 cursor-not-allowed">Suivant</button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310]/70 hover:bg-[#F5F4F2] disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Précédent
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="h-9 rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310]/70 hover:bg-[#F5F4F2] disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-colors"
+            >
+              Suivant <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
