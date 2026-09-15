@@ -131,12 +131,14 @@ export default function DetailAnimal() {
       setSavingSante(true);
       await api.updateAnimal(id, { presence, etat_sante: etatSante, observations: noteSante });
       setAnimal(prev => ({ ...prev, presence, etat_sante: etatSante, observations: noteSante }));
-      // Si l'état de santé devient "gestation", ouvrir le formulaire de gestation
-      // Si l'état de santé devient "malade" ou "en_traitement", ouvrir le formulaire de suivi
       if (etatSante === 'gestation') {
         navigate(`/gestation/ajouter?animal=${id}`);
       } else if (etatSante === 'malade' || etatSante === 'en_traitement') {
-        navigate(`/sante/ajouter?animal=${id}&statut=${etatSante === 'malade' ? 'Malade' : 'En traitement'}`);
+        const ouvert = await api.getSuiviSanteOuvert(id);
+        const statut = etatSante === 'malade' ? 'Malade' : 'En traitement';
+        navigate(ouvert
+          ? `/sante/${ouvert.id}/modifier`
+          : `/sante/ajouter?animal=${id}&statut=${statut}`);
       }
     } catch (err) {
       setError(err.message || 'Erreur lors de la sauvegarde.');

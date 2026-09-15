@@ -438,6 +438,18 @@ export const api = {
     });
   },
 
+  async getSuiviSanteOuvert(animalId) {
+    const data = await request(`${SANTE_URL}/?animal=${animalId}`, {
+      method: 'GET',
+      token: getStoredToken(),
+    });
+    const list = Array.isArray(data) ? data : (data?.results || []);
+    return list.find((s) => {
+      const statut = (s.statut || '').toLowerCase();
+      return statut !== 'guéri' && statut !== 'gueri' && !s.date_fin;
+    }) || null;
+  },
+
   async getSanteById(id) {
     return request(`${SANTE_URL}/${id}/`, {
       method: 'GET',

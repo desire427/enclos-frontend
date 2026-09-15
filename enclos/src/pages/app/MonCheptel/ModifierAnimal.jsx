@@ -104,7 +104,11 @@ export default function ModifierAnimal() {
       if (etatSante === 'gestation') {
         navigate(`/gestation/ajouter?animal=${id}`);
       } else if (etatSante === 'malade' || etatSante === 'en_traitement') {
-        navigate(`/sante/ajouter?animal=${id}&statut=${etatSante === 'malade' ? 'Malade' : 'En traitement'}`);
+        const ouvert = await api.getSuiviSanteOuvert(id);
+        const statut = etatSante === 'malade' ? 'Malade' : 'En traitement';
+        navigate(ouvert
+          ? `/sante/${ouvert.id}/modifier`
+          : `/sante/ajouter?animal=${id}&statut=${statut}`);
       } else {
         navigate(`/cheptel/${id}`);
       }
