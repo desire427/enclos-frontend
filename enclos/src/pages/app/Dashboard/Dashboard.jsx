@@ -40,52 +40,39 @@ function speciesBreakdown(animals) {
       pct:   (counts[key] / total) * 100,
     }));
 }
-
-/* ------------------------------------------------------------------ */
-/* Évolution sur les 12 mois de l'année en cours                       */
-/* Chaque barre = nb total d'animaux présents dans la ferme ce mois    */
-/* ------------------------------------------------------------------ */
 const MOIS_FR = [
   'Jan','Fév','Mar','Avr','Mai','Jun',
   'Jul','Aoû','Sep','Oct','Nov','Déc',
 ];
 
-function monthlyEvolution(animals) {
-  const now        = new Date();
-  const year       = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexé, ex: 8 = Septembre
+function monthlyArrivals(animals) {
+  const now          = new Date();
+  const year         = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexé
 
-  // Seulement les mois de Jan jusqu'au mois actuel inclus
+  // 12 slots, un par mois
   const slots = MOIS_FR.map((label, month) => ({ label, month, count: 0 }));
 
   animals.forEach(a => {
     const raw = a.date_arrivee || a.date_creation;
     if (!raw) return;
+
     const arrived = new Date(raw);
     if (isNaN(arrived)) return;
 
-    const rawDepart = a.date_depart;
-    const departed  = rawDepart ? new Date(rawDepart) : null;
+    // On ne compte que les animaux arrivés cette année
+    if (arrived.getFullYear() !== year) return;
 
-    slots.forEach(s => {
-      // Ne pas toucher aux mois futurs (après le mois en cours)
-      if (s.month > currentMonth) return;
+    const month = arrived.getMonth();
 
-      const endOfMonth   = new Date(year, s.month + 1, 0); // dernier jour du mois
-      const startOfMonth = new Date(year, s.month, 1);
+    // Ignorer les mois futurs
+    if (month > currentMonth) return;
 
-      const arrivedBefore = arrived <= endOfMonth;
-      const notGoneYet    = !departed || departed >= startOfMonth;
-
-      if (arrivedBefore && notGoneYet) {
-        s.count++;
-      }
-    });
+    slots[month].count++;
   });
 
   return slots;
 }
-
 /* ------------------------------------------------------------------ */
 /* Graphique DONUT (conic-gradient CSS + SVG pour trou central)        */
 /* ------------------------------------------------------------------ */
@@ -281,7 +268,7 @@ export default function Dashboard() {
   ];
 
   const breakdown = speciesBreakdown(stats.animals);
-  const evolution = monthlyEvolution(stats.animals);
+  const evolution = monthlyArrivals(stats.animals);
   const isEmpty   = stats.animals.length === 0;
   const currentYear = new Date().getFullYear();
 
@@ -325,13 +312,13 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Barres — Évolution du cheptel sur l'année */}
+        {/* Barres — Arrivées par mois */}
         <div className="rounded-2xl border border-[#E5E5E3] bg-white p-6">
           <h2 className="font-serif text-[16px] font-medium text-[#171310] mb-1">
-            Évolution de l&apos;élevage
+            Arrivées par mois
           </h2>
           <p className="text-[11px] text-[#171310]/40 mb-4">
-            Nombre total d&apos;animaux par mois — {currentYear}
+            Nombre d&apos;animaux arrivés chaque mois — {currentYear}
           </p>
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center h-[160px] gap-3 text-[#171310]/25">
