@@ -38,11 +38,11 @@ export default function Connexion() {
     <div className="min-h-screen flex flex-col">
       <PublicHeader mode="steps" currentStep={3} />
 
-      <main className="flex-1 bg-[#F5F4F2] flex flex-col items-center px-6 lg:px-10 py-12">
-        <h1 className="font-serif text-[32px] leading-tight text-[#171310] mb-2">Connexion</h1>
+      <main className="flex-1 bg-[#F5F4F2] flex flex-col items-center px-4 sm:px-6 lg:px-10 py-12">
+        <h1 className="font-serif text-[28px] sm:text-[32px] leading-tight text-[#171310] mb-2">Connexion</h1>
         <p className="text-[#171310]/60 text-[15px] mb-8">Accédez à votre exploitation en toute sécurité.</p>
 
-        <div className="w-full max-w-[420px] bg-white border border-[#E5E5E3] rounded-2xl p-8 shadow-sm">
+        <div className="w-full max-w-[420px] bg-white border border-[#E5E5E3] rounded-2xl p-6 sm:p-8 shadow-sm">
           <form onSubmit={handleSubmit}>
             <div className="mb-5">
               <label htmlFor="username" className="block text-[13px] font-semibold text-[#171310] mb-2">

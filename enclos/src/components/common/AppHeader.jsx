@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import AlertesPanel from '../../pages/app/Alertes/AlertesPanel';
 import api from '../../API/api';
 
-export default function AppHeader() {
+export default function AppHeader({ onMenuOpen }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [alertes, setAlertes] = useState([]);
   const [error, setError] = useState('');
@@ -46,8 +46,19 @@ export default function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 h-[64px] bg-white/95 backdrop-blur border-b border-[#EEEEEE] flex items-center justify-end px-6 lg:px-10">
-        <button type="button" onClick={() => setPanelOpen(true)} className="relative w-9 h-9 rounded-full border border-[#E5E5E3] flex items-center justify-center hover:bg-[#F5F4F2] transition-colors" aria-label="Voir les alertes">
+      <header className="sticky top-0 z-50 h-[64px] bg-white/95 backdrop-blur border-b border-[#EEEEEE] flex items-center justify-between px-4 sm:px-6 lg:px-10">
+        {/* Bouton hamburger — visible uniquement sur mobile */}
+        <button
+          type="button"
+          onClick={onMenuOpen}
+          className="md:hidden w-9 h-9 rounded-full border border-[#E5E5E3] flex items-center justify-center hover:bg-[#F5F4F2] transition-colors"
+          aria-label="Ouvrir le menu"
+        >
+          <Menu className="w-4 h-4 text-[#171310]/70 stroke-[1.7]" />
+        </button>
+
+        {/* Cloche alertes */}
+        <button type="button" onClick={() => setPanelOpen(true)} className="relative w-9 h-9 rounded-full border border-[#E5E5E3] flex items-center justify-center hover:bg-[#F5F4F2] transition-colors ml-auto" aria-label="Voir les alertes">
           <Bell className="w-4 h-4 text-[#171310]/70 stroke-[1.7]" />
           {nonLues > 0 && (
             <span className="absolute -right-1 -top-1 w-4 h-4 rounded-full bg-[#5C3A21] text-white text-[10px] flex items-center justify-center font-semibold">

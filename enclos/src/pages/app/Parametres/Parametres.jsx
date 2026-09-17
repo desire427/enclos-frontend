@@ -210,7 +210,7 @@ export default function Parametres() {
                 ) : (
                   <div
                     className="w-20 h-20 rounded-full flex items-center justify-center text-white text-[22px] font-bold"
-                    style={{ background: 'linear-gradient(to bottom right, #f472b6, #60a5fa, #4ade80)' }}
+                    style={{ background: 'linear-gradient(to bottom right, #60a5fa)' }}
                   >
                     {initiales}
                   </div>

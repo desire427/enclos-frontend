@@ -102,7 +102,7 @@ export default function Inscription() {
     <div className="min-h-screen flex flex-col">
       <PublicHeader mode="steps" currentStep={1} />
 
-      <main className="flex-1 px-6 lg:px-10 pt-8 pb-12">
+      <main className="flex-1 px-4 sm:px-8 lg:px-10 pt-8 pb-12">
         <div className="max-w-5xl mx-auto">
 
           <h1 className="font-serif text-[32px] leading-tight text-[#171310] mb-2">
@@ -117,7 +117,7 @@ export default function Inscription() {
             {/* ══════════════════════════════════════
                 FORMULAIRE
             ══════════════════════════════════════ */}
-            <section className="border border-[#E5E5E3] rounded-2xl p-8 bg-white">
+            <section className="border border-[#E5E5E3] rounded-2xl p-6 sm:p-8 bg-white">
 
               {/* ── Compte ── */}
               <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">

@@ -181,7 +181,8 @@ export default function Abonnement() {
           <div className="px-6 py-4 border-b border-[#E5E5E3]">
             <h2 className="font-serif text-[17px] font-medium text-[#171310]">Historique des factures</h2>
           </div>
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse" style={{ minWidth: '480px' }}>
             <thead>
               <tr className="h-10 bg-[#F5F4F2] border-b border-[#E5E5E3]">
                 {['Facture','Date','Montant','Statut','Action'].map(h => (
@@ -201,6 +202,7 @@ export default function Abonnement() {
               )) : <tr><td colSpan="5" className="px-4 py-4 text-sm text-[#171310]/60">Aucune facture.</td></tr>}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

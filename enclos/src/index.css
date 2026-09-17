@@ -103,3 +103,43 @@ select { appearance: none; -webkit-appearance: none; }
 
 /* Mobile menu transition */
 #mobile-menu { transition: max-height .25s ease, opacity .2s ease; overflow: hidden; }
+
+/* ─────────────────────────────────────────────
+   Responsive — correctifs globaux
+   ───────────────────────────────────────────── */
+
+/* Les en-têtes de page (titre + bouton CTA) passent en colonne sur mobile */
+@media (max-width: 639px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Les champs de recherche/filtres s'étirent sur mobile */
+  .filter-bar input[type="text"],
+  .filter-bar input[type="search"] {
+    width: 100%;
+  }
+}
+
+/* Tableaux : assure que le wrapper overflow-x-auto soit bien scrollable */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* PublicFooter simple — liens en colonne sur très petit écran */
+@media (max-width: 479px) {
+  .public-footer-links {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+/* AppFooter : même chose */
+@media (max-width: 479px) {
+  footer .footer-links {
+    display: none;
+  }
+}

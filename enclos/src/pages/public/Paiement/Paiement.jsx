@@ -92,15 +92,15 @@ export default function Paiement() {
     <div className="min-h-screen flex flex-col">
       <PublicHeader mode="steps" currentStep={2} />
 
-      <main className="flex-1 px-6 lg:px-10 pt-8 pb-12">
+      <main className="flex-1 px-4 sm:px-8 lg:px-10 pt-8 pb-12">
         <div className="max-w-3xl mx-auto">
-          <h1 className="font-serif text-[32px] leading-tight text-[#171310] mb-2">Paiement</h1>
+          <h1 className="font-serif text-[28px] sm:text-[32px] leading-tight text-[#171310] mb-2">Paiement</h1>
           <p className="text-[#171310]/60 text-[15px] mb-8">
             Finalisez votre inscription en réglant votre premier mois d'abonnement.
           </p>
 
           <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
-            <section className="border border-[#E5E5E3] rounded-2xl p-8 bg-white">
+            <section className="border border-[#E5E5E3] rounded-2xl p-6 sm:p-8 bg-white">
               <div className="h-[48px] bg-[#F5F4F2] rounded-lg flex p-1 mb-6">
                 <TabBtn active={paymentType === 'mobile'} onClick={() => setPaymentType('mobile')} icon={<Smartphone className="w-4 h-4 stroke-[1.8]" />} label="Mobile Money" />
                 <TabBtn active={paymentType === 'card'} onClick={() => setPaymentType('card')} icon={<CreditCard className="w-4 h-4 stroke-[1.8]" />} label="Carte bancaire" />

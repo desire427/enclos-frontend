@@ -123,14 +123,14 @@ export default function Gestation() {
   return (
     <>
       {/* ── Titre ── */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="font-serif text-[28px] leading-tight text-[#171310]">Gestation</h1>
           <p className="mt-1 text-[13px] text-[#171310]/50">Suivez les gestations de votre cheptel</p>
         </div>
         <Link
           to="/gestation/ajouter"
-          className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors"
+          className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors self-start"
         >
           <Plus className="w-4 h-4 stroke-[1.8]" />
           Nouvelle gestation
@@ -161,14 +161,14 @@ export default function Gestation() {
 
       {/* ── Filtres ── */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/40" />
           <input
             type="text"
             placeholder="Rechercher un animal..."
             value={search}
             onChange={e => { setSearch(e.target.value); resetPage(); }}
-            className="h-9 w-[240px] rounded-lg border border-[#E5E5E3] bg-white pl-9 pr-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
+            className="h-9 w-full sm:w-[240px] rounded-lg border border-[#E5E5E3] bg-white pl-9 pr-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
         </div>
         <FilterDropdown

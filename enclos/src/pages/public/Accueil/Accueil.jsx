@@ -28,7 +28,7 @@ export default function Accueil() {
 
       <main className="flex-1">
         {/* ===== HERO ===== */}
-        <section id="accueil" className="max-w-7xl mx-auto px-6 lg:px-10 pt-14 lg:pt-20 pb-16 lg:pb-24">
+        <section id="accueil" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 pt-14 lg:pt-20 pb-16 lg:pb-24">
           <div className="grid lg:grid-cols-[1.05fr_1fr] gap-14 lg:gap-10 items-center">
             <div className="reveal">
               <p className="text-[#5C3A21] font-semibold text-sm tracking-wide">Gestion de cheptel</p>
@@ -67,7 +67,7 @@ export default function Accueil() {
         <div className="fence-rule"></div>
 
         {/* ===== FONCTIONNALITÉS ===== */}
-        <section id="fonctionnalites" className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+        <section id="fonctionnalites" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16 lg:py-28">
           <div className="max-w-xl">
             <h2 className="font-serif text-4xl sm:text-[2.75rem] leading-tight text-[#171310]">
               Tout votre élevage, dans une seule application
@@ -118,8 +118,8 @@ export default function Accueil() {
         </section>
 
         {/* ===== VALEUR / CONFIANCE ===== */}
-        <section className="bg-[#171310] text-white py-20 lg:py-28">
-          <div className="max-w-7xl mx-auto px-6 lg:px-10">
+        <section className="bg-[#171310] text-white py-16 lg:py-28">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
             <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-14 items-start">
               <div>
                 <h2 className="font-serif text-4xl sm:text-[2.75rem] leading-tight">
@@ -147,7 +147,7 @@ export default function Accueil() {
         </section>
 
         {/* ===== TARIFS ===== */}
-        <section id="tarifs" className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+        <section id="tarifs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16 lg:py-28">
           <div className="text-center max-w-xl mx-auto">
             <h2 className="font-serif text-4xl sm:text-[2.75rem] leading-tight text-[#171310]">
               Un tarif pour chaque exploitation
@@ -223,7 +223,7 @@ export default function Accueil() {
 
         {/* ===== CTA FINAL ===== */}
         <section className="bg-[#F5F4F2] border-y border-[#171310]/10">
-          <div className="max-w-4xl mx-auto px-6 lg:px-10 py-20 lg:py-24 text-center">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-16 lg:py-24 text-center">
             <h2 className="font-serif text-4xl sm:text-5xl leading-tight text-[#171310]">
               Prêt à simplifier la gestion de votre élevage&nbsp;?
             </h2>

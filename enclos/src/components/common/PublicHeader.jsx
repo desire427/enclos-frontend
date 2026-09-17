@@ -17,16 +17,16 @@ export default function PublicHeader({ mode = 'landing', currentStep = 1 }) {
       { n: 3, label: 'Connexion' },
     ];
     return (
-      <header className="sticky top-0 z-50 h-[64px] bg-white/95 backdrop-blur border-b border-[#EEEEEE] flex items-center px-6 lg:px-10">
-        <Link to="/" className="flex items-center w-[160px]">
+      <header className="sticky top-0 z-50 h-auto min-h-[64px] bg-white/95 backdrop-blur border-b border-[#EEEEEE] flex items-center px-4 sm:px-6 lg:px-10 py-3 gap-4">
+        <Link to="/" className="flex items-center w-[120px] sm:w-[160px] shrink-0">
           <img src={Logo} alt="Enclos" />
         </Link>
-        <div className="ml-auto flex items-center gap-3 text-[13px] text-[#171310]">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-3 text-[12px] sm:text-[13px] text-[#171310] flex-wrap justify-end">
           {steps.map((s, i) => (
-            <span key={s.n} className="flex items-center gap-2">
+            <span key={s.n} className="flex items-center gap-1 sm:gap-2">
               {i > 0 && <span className="text-[#171310]/30">/</span>}
               <span
-                className={`w-[22px] h-[22px] rounded-full inline-flex items-center justify-center text-[11px] font-semibold
+                className={`w-[20px] h-[20px] sm:w-[22px] sm:h-[22px] rounded-full inline-flex items-center justify-center text-[10px] sm:text-[11px] font-semibold
                   ${s.n === currentStep
                     ? 'bg-[#5C3A21] text-white'
                     : 'border border-[#171310]/30 text-[#171310]/60'
@@ -34,7 +34,7 @@ export default function PublicHeader({ mode = 'landing', currentStep = 1 }) {
               >
                 {s.n}
               </span>
-              <span className={s.n === currentStep ? 'font-semibold' : 'text-[#171310]/60'}>
+              <span className={`hidden sm:inline ${s.n === currentStep ? 'font-semibold' : 'text-[#171310]/60'}`}>
                 {s.label}
               </span>
             </span>

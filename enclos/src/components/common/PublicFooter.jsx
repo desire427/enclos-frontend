@@ -6,7 +6,7 @@ export default function PublicFooter({ variant = 'simple' }) {
   if (variant === 'light') {
     return (
       <footer id="contact" className="bg-[#171310] text-white/70">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
             <div>
               <div className="flex items-center w-[160px]">
@@ -57,7 +57,7 @@ export default function PublicFooter({ variant = 'simple' }) {
 
   // variant === "simple"
   return (
-    <footer className="h-[56px] border-t border-[#EEEEEE] px-6 lg:px-10 flex items-center justify-between">
+    <footer className="h-auto min-h-[56px] border-t border-[#EEEEEE] px-4 sm:px-6 lg:px-10 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
       <span className="text-[12px] text-[#171310]/60">© 2026 Enclos. Tous droits réservés.</span>
       <div className="flex items-center gap-5 text-[12px] text-[#171310]/60">
         <a href="#" className="hover:text-[#171310] transition-colors">Mentions Légales</a>
