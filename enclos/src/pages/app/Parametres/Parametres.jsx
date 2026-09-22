@@ -6,6 +6,7 @@ import {
   MapPin, Ruler, FileText, Map,
 } from 'lucide-react';
 import api from '../../../API/api';
+import { clean, validateEmail, validateFarm, validateName, validatePassword, validatePhone } from '../../../utils/validation';
 
 const inputCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
 
@@ -42,6 +43,11 @@ export default function Parametres() {
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+      setError('La photo doit être une image de 5 Mo maximum.');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = ev => setAvatar(ev.target.result);
     reader.readAsDataURL(file);
@@ -71,6 +77,8 @@ export default function Parametres() {
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [farmLimit, setFarmLimit] = useState(null);
   const [error, setError] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -132,27 +140,38 @@ export default function Parametres() {
 
   /* ── Handlers ── */
   function saveProfile() {
+    const profileErrorMessage = validateName(nom, 'Le nom complet', { min: 3, max: 100 }) || validateEmail(email) || validatePhone(tel);
+    setProfileError(profileErrorMessage);
+    if (profileErrorMessage) return;
     setProfSaved(true);
     setTimeout(() => setProfSaved(false), 2500);
   }
 
   function savePwd() {
-    if (!oldPwd || !newPwd) return;
+    const passwordErrorMessage = !oldPwd
+      ? 'Le mot de passe actuel est obligatoire.'
+      : validatePassword(newPwd, 'Le nouveau mot de passe');
+    setPasswordError(passwordErrorMessage);
+    if (passwordErrorMessage) return;
     setPwdSaved(true);
     setOldPwd(''); setNewPwd('');
     setTimeout(() => setPwdSaved(false), 2500);
   }
 
   async function addFerme() {
-    if (!newFerme.nom.trim()) return;
+    const validation = validateFarm(newFerme);
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
 
     try {
       await api.createFarm({
-        nom: newFerme.nom,
-        localisation: newFerme.localisation,
+        nom: clean(newFerme.nom),
+        localisation: clean(newFerme.localisation),
         superficie: parseFloat(newFerme.superficie) || 0,
-        description: newFerme.description,
-        coordonnees_gps: newFerme.coordonneesGPS,
+        description: clean(newFerme.description),
+        coordonnees_gps: clean(newFerme.coordonneesGPS),
       });
 
       const farms = await api.getFarms();
@@ -289,6 +308,7 @@ export default function Parametres() {
             </div>
           </div>
 
+          {profileError && <p className="mb-3 text-[12px] text-red-600">{profileError}</p>}
           <div className="flex justify-end">
             <button
               type="button"
@@ -338,6 +358,7 @@ export default function Parametres() {
             </Field>
           </div>
 
+          {passwordError && <p className="mt-3 text-[12px] text-red-600">{passwordError}</p>}
           <div className="mt-4 flex justify-end">
             <button
               type="button"

@@ -77,8 +77,8 @@ export default function ChangerForfait() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
         {plans.map(p => {
-          const isSelected  = selected === p.id;
-          const isCurrent   = currentPlanId === p.id;
+          const isSelected  = String(selected) === String(p.id);
+          const isCurrent   = String(currentPlanId) === String(p.id);
           const features = [
             `${p.nb_fermes_max ?? '∞'} ferme${p.nb_fermes_max === 1 ? '' : 's'}`,
             `${p.nb_animaux_max ?? '∞'} animal${p.nb_animaux_max === 1 ? '' : 's'}`,

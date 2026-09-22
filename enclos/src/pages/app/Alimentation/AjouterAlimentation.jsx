@@ -5,6 +5,7 @@ import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
 import useAlimRefs from '../../../hooks/useAlimRefs';
 import CreateSimpleModal from '../../../components/common/CreateSimpleModal';
+import { clean, validateAlimentation } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -90,6 +91,11 @@ export default function AjouterAlimentation() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const validation = validateAlimentation({ animal, typeAliment, frequence, quantite, date, note });
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     try {
       setSaving(true);
       await api.createAlimentation({
@@ -98,7 +104,7 @@ export default function AjouterAlimentation() {
         frequence:         frequence    ? Number(frequence)    : null,
         quantite_kg:       Number(quantite),
         date_alimentation: date,
-        note,
+        note: clean(note),
       });
       navigate('/alimentation');
     } catch (err) {

@@ -6,6 +6,7 @@ import {
   Bell,
 } from 'lucide-react';
 import api from '../../../API/api';
+import { clean, validateSelect, validateText } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 const TABS = ['Général', 'Santé', 'Alimentation'];
@@ -127,10 +128,18 @@ export default function DetailAnimal() {
 
   async function handleSaveSante() {
     if (!animal) return;
+    const validationError = validateSelect(presence, 'La présence', ['present', 'vendu', 'mort'])
+      || validateSelect(etatSante, "L'état de santé", ['sain', 'malade', 'gestation', 'en_traitement'])
+      || validateText(noteSante, 'La note de santé', { optional: true, max: 2000 });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     try {
       setSavingSante(true);
-      await api.updateAnimal(id, { presence, etat_sante: etatSante, observations: noteSante });
-      setAnimal(prev => ({ ...prev, presence, etat_sante: etatSante, observations: noteSante }));
+      const observations = clean(noteSante);
+      await api.updateAnimal(id, { presence, etat_sante: etatSante, observations });
+      setAnimal(prev => ({ ...prev, presence, etat_sante: etatSante, observations }));
       if (etatSante === 'gestation') {
         navigate(`/gestation/ajouter?animal=${id}`);
       } else if (etatSante === 'malade' || etatSante === 'en_traitement') {

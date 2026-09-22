@@ -4,21 +4,33 @@ import { Smartphone, CreditCard, LockKeyhole } from 'lucide-react';
 import PublicHeader from '../../../components/common/PublicHeader';
 import PublicFooter from '../../../components/common/PublicFooter';
 import api from '../../../API/api';
+import { clean, validatePayment } from '../../../utils/validation';
 
 export default function Paiement() {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedPlanId = location.state?.selectedPlan || null;
+  const paymentToken = new URLSearchParams(location.search).get('token');
+  const registration = location.state?.registration || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('enclos_pending_registration') || 'null');
+    } catch {
+      return null;
+    }
+  })();
 
   const [paymentType, setPaymentType] = useState('mobile');
   const [operator, setOperator] = useState('wave');
   const [phone, setPhone] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
   const [plan, setPlan] = useState(null);
 
   useEffect(() => {
-    const paymentToken = new URLSearchParams(location.search).get('token');
     if (!paymentToken) return;
 
     async function confirmPayment() {
@@ -28,6 +40,13 @@ export default function Paiement() {
         if (subscription?.statut !== 'active') {
           throw new Error('Le paiement n’a pas encore été confirmé par PayDunya.');
         }
+        if (subscription?.auth?.access) {
+          api.setToken(subscription.auth.access);
+          if (subscription.auth.refresh) {
+            localStorage.setItem('enclos_refresh_token', subscription.auth.refresh);
+          }
+        }
+        sessionStorage.removeItem('enclos_pending_registration');
         navigate('/dashboard', { replace: true });
       } catch (err) {
         setError(err.message || 'Impossible de confirmer le paiement.');
@@ -37,7 +56,7 @@ export default function Paiement() {
     }
 
     confirmPayment();
-  }, [location.search, navigate]);
+  }, [paymentToken, navigate]);
 
   useEffect(() => {
     async function loadPlan() {
@@ -59,6 +78,12 @@ export default function Paiement() {
 
   async function handlePay() {
     setError('');
+    const validation = validatePayment({ paymentType, phone, cardNumber, expiry, cvv, planId: plan?.id });
+    setValidationErrors(validation.errors);
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -69,9 +94,10 @@ export default function Paiement() {
       const payload = {
         plan: plan.id,
         montant_paye: Number(plan.prix),
-        phone,
+        phone: clean(phone),
         operator,
         customer_name: 'Client test Enclos',
+        registration,
       };
 
       const checkout = await api.createPaydunyaCheckout(payload);
@@ -86,6 +112,18 @@ export default function Paiement() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (paymentToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F4F2] px-4">
+        <div className="text-center">
+          {error
+            ? <p className="text-sm text-red-700">{error}</p>
+            : <p className="text-sm text-[#171310]/60">Confirmation du paiement...</p>}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -112,6 +150,7 @@ export default function Paiement() {
                     <OperatorCard value="wave" current={operator} onSelect={setOperator} logo={<span className="w-9 h-9 rounded-full bg-[#34261C] text-white flex items-center justify-center text-[14px] font-bold">≋</span>} label="Wave" />
                     <OperatorCard value="orange" current={operator} onSelect={setOperator} logo={<span className="w-9 h-9 rounded-full bg-[#222] text-white flex items-center justify-center text-[13px] font-bold">OM</span>} label="Orange Money" />
                   </div>
+                  {validationErrors.phone && <p className="mt-1 text-[11px] text-red-700">{validationErrors.phone}</p>}
 
                   <div className="mb-6">
                     <label className="block text-[13px] font-semibold text-[#171310] mb-2">Numéro de téléphone</label>
@@ -136,21 +175,24 @@ export default function Paiement() {
                     <label className="block text-[13px] font-semibold text-[#171310] mb-2">Numéro de carte</label>
                     <div className="h-11 border border-[#DCDCD9] rounded-[10px] flex items-center px-3 gap-[10px] bg-white focus-within:border-[#5C3A21] focus-within:shadow-[0_0_0_3px_rgba(92,58,33,0.12)] transition-all">
                       <CreditCard className="w-4 h-4 text-[#171310]/50 stroke-[1.6]" />
-                      <input type="text" placeholder="0000 0000 0000 0000" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
+                      <input type="text" inputMode="numeric" maxLength={19} value={cardNumber} onChange={e => setCardNumber(e.target.value)} placeholder="0000 0000 0000 0000" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
                     </div>
+                    {validationErrors.cardNumber && <p className="mt-1 text-[11px] text-red-700">{validationErrors.cardNumber}</p>}
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4 mb-6">
                     <div>
                       <label className="block text-[13px] font-semibold text-[#171310] mb-2">Date d'expiration</label>
                       <div className="h-11 border border-[#DCDCD9] rounded-[10px] flex items-center px-3 bg-white focus-within:border-[#5C3A21] transition-all">
-                        <input type="text" placeholder="MM / AA" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
+                        <input type="text" inputMode="numeric" maxLength={7} value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="MM / AA" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
                       </div>
+                      {validationErrors.expiry && <p className="mt-1 text-[11px] text-red-700">{validationErrors.expiry}</p>}
                     </div>
                     <div>
                       <label className="block text-[13px] font-semibold text-[#171310] mb-2">CVV</label>
                       <div className="h-11 border border-[#DCDCD9] rounded-[10px] flex items-center px-3 bg-white focus-within:border-[#5C3A21] transition-all">
-                        <input type="text" placeholder="123" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
+                        <input type="text" inputMode="numeric" maxLength={4} value={cvv} onChange={e => setCvv(e.target.value)} placeholder="123" className="w-full text-[14px] text-[#171310] bg-transparent outline-none" />
                       </div>
+                      {validationErrors.cvv && <p className="mt-1 text-[11px] text-red-700">{validationErrors.cvv}</p>}
                     </div>
                   </div>
                   <button type="button" onClick={handlePay} disabled={loading || !plan} className="w-full h-[48px] rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white text-[15px] font-semibold flex items-center justify-center gap-2 transition-colors">

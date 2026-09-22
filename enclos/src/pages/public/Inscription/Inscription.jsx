@@ -8,6 +8,7 @@ import {
 import PublicHeader from '../../../components/common/PublicHeader';
 import PublicFooter from '../../../components/common/PublicFooter';
 import api from '../../../API/api';
+import { clean, validateRegistration } from '../../../utils/validation';
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                 */
@@ -35,6 +36,7 @@ export default function Inscription() {
   const [selectedPlan, setSelectedPlan] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
   const plan = plans.find(p => String(p.id) === String(selectedPlan)) || null;
 
   useEffect(() => {
@@ -53,44 +55,37 @@ export default function Inscription() {
   async function handleContinue() {
     setError('');
 
-    if (!conditions) {
-      setError('Veuillez accepter les conditions d’utilisation.');
+    const validation = validateRegistration({ nom, email, telephone, motDePasse, nomFerme, localisation, superficie, coordGPS, description, conditions, selectedPlan });
+    setValidationErrors(validation.errors);
+    if (validation.message) {
+      setError(validation.message);
       return;
     }
 
-    if (!nom.trim() || !email.trim() || !telephone.trim() || !motDePasse.trim() || !nomFerme.trim() || !localisation.trim()) {
-      setError('Veuillez remplir tous les champs obligatoires.');
-      return;
-    }
-
-    const firstName = nom.trim().split(/\s+/)[0] || nom.trim();
-    const lastName = nom.trim().split(/\s+/).slice(1).join(' ') || '';
-    const username = email.trim().split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
+    const normalizedName = clean(nom);
+    const firstName = normalizedName.split(/\s+/)[0] || normalizedName;
+    const lastName = normalizedName.split(/\s+/).slice(1).join(' ') || '';
+    const username = clean(email).split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
 
     setLoading(true);
     try {
       const payload = {
         username,
-        email,
+        email: clean(email).toLowerCase(),
         password: motDePasse,
         password_confirm: motDePasse,
         first_name: firstName,
         last_name: lastName,
-        telephone,
-        nom_ferme: nomFerme,
-        localisation,
+        telephone: clean(telephone),
+        nom_ferme: clean(nomFerme),
+        localisation: clean(localisation),
         superficie: superficie ? Number(superficie) : 0,
-        coordonnees_gps: coordGPS,
-        description,
+        coordonnees_gps: clean(coordGPS),
+        description: clean(description),
       };
 
-      await api.register(payload);
-      const tokenPayload = await api.login({ username, password: motDePasse });
-      if (tokenPayload?.access) {
-        api.setToken(tokenPayload.access);
-      }
-
-      navigate('/paiement', { state: { selectedPlan: Number(selectedPlan) } });
+      sessionStorage.setItem('enclos_pending_registration', JSON.stringify(payload));
+      navigate('/paiement', { state: { selectedPlan: Number(selectedPlan), registration: payload } });
     } catch (err) {
       setError(err.message || 'Erreur lors de la création du compte.');
     } finally {
@@ -139,6 +134,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.nom} />
                 </div>
 
                 <div>
@@ -154,6 +150,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.email} />
                 </div>
               </div>
 
@@ -175,6 +172,7 @@ export default function Inscription() {
                       className="w-full px-3 text-[14px] bg-transparent outline-none"
                     />
                   </div>
+                  <FieldError message={validationErrors.telephone} />
                 </div>
 
                 <div>
@@ -204,6 +202,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.motDePasse} />
                 </div>
               </div>
 
@@ -227,6 +226,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.nomFerme} />
                 </div>
 
                 <div>
@@ -242,6 +242,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.localisation} />
                 </div>
               </div>
 
@@ -262,6 +263,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.superficie} />
                 </div>
 
                 <div>
@@ -277,6 +279,7 @@ export default function Inscription() {
                       className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                     />
                   </FieldInput>
+                  <FieldError message={validationErrors.coordGPS} />
                 </div>
               </div>
 
@@ -295,6 +298,7 @@ export default function Inscription() {
                     className="w-full resize-none rounded-[10px] border border-[#DCDCD9] bg-white pl-9 pr-3 py-2.5 text-[14px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] focus:shadow-[0_0_0_3px_rgba(92,58,33,0.12)] transition-all"
                   />
                 </div>
+                <FieldError message={validationErrors.description} />
               </div>
 
               {/* Conditions */}
@@ -310,6 +314,7 @@ export default function Inscription() {
                   <a href="#" className="underline text-[#171310]">Conditions d'Utilisation</a>
                 </span>
               </label>
+              <FieldError message={validationErrors.conditions || validationErrors.plan} />
 
               {error && <div className="mb-4 text-sm text-red-700">{error}</div>}
 
@@ -431,4 +436,8 @@ function FieldInput({ icon, suffix, children }) {
       {suffix}
     </div>
   );
+}
+
+function FieldError({ message }) {
+  return message ? <p className="mt-1 text-[11px] text-red-700">{message}</p> : null;
 }

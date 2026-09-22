@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Check, Plus } from 'lucide-react';
 import api from '../../../API/api';
+import { clean, validateAnimal } from '../../../utils/validation';
 
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -85,10 +86,15 @@ export default function ModifierAnimal() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const validation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations });
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     try {
       setSaving(true);
       await api.updateAnimal(id, {
-        nom,
+        nom: clean(nom),
         espece,
         race:            race || null,
         sexe,
@@ -96,8 +102,8 @@ export default function ModifierAnimal() {
         poids_naissance: poids || 0,
         presence,
         etat_sante:      etatSante,
-        couleur,
-        observations,
+        couleur: clean(couleur),
+        observations: clean(observations),
       });
       // Si l'état de santé est "gestation", ouvrir le formulaire de gestation
       // Si l'état de santé est "malade" ou "en_traitement", ouvrir le formulaire de suivi santé

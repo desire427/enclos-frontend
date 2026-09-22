@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Check, Trash2 } from 'lucide-react';
 import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
+import { clean, validateGestation } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -66,6 +67,11 @@ export default function ModifierGestation() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const validation = validateGestation({ animalId, statut, dateDebut, datePrevue, dateMiseBas, dureeJours, nombreNaissances, note }, isNew);
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     try {
       setSaving(true);
       const payload = {
@@ -76,7 +82,7 @@ export default function ModifierGestation() {
         pere:                 pereId      ? Number(pereId) : null,
         duree_jours:          dureeJours  ? Number(dureeJours) : 0,
         nombre_naissances:    nombreNaissances !== '' ? Number(nombreNaissances) : null,
-        note,
+        note: clean(note),
         ...(isNew ? { animal: Number(animalId) } : {}),
       };
       if (isNew) {

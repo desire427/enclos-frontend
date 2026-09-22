@@ -4,6 +4,7 @@ import { Mail, Warehouse, LockKeyhole, Eye, EyeOff, ArrowRight } from 'lucide-re
 import PublicHeader from '../../../components/common/PublicHeader';
 import PublicFooter from '../../../components/common/PublicFooter';
 import api from '../../../API/api';
+import { clean, validateLogin } from '../../../utils/validation';
 
 export default function Connexion() {
   const navigate = useNavigate();
@@ -12,15 +13,22 @@ export default function Connexion() {
   const [farmName, setFarmName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const validation = validateLogin({ username, farmName, password });
+    setValidationErrors(validation.errors);
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     setLoading(true);
 
     try {
-      const payload = await api.login({ username, password, nom_ferme: farmName });
+      const payload = await api.login({ username: clean(username), password, nom_ferme: clean(farmName) });
       if (payload?.access) {
         api.setToken(payload.access);
         navigate('/dashboard');
@@ -60,6 +68,7 @@ export default function Connexion() {
                   required
                 />
               </div>
+              <FieldError message={validationErrors.username} />
             </div>
 
             <div className="mb-5">
@@ -77,6 +86,7 @@ export default function Connexion() {
                   className="w-full text-[14px] text-[#171310] bg-transparent outline-none"
                 />
               </div>
+              <FieldError message={validationErrors.farmName} />
             </div>
 
             <div className="mb-6">
@@ -106,6 +116,7 @@ export default function Connexion() {
                   }
                 </button>
               </div>
+              <FieldError message={validationErrors.password} />
             </div>
 
             {error && <div className="mb-4 text-sm text-red-700">{error}</div>}
@@ -138,4 +149,8 @@ export default function Connexion() {
       <PublicFooter variant="simple" />
     </div>
   );
+}
+
+function FieldError({ message }) {
+  return message ? <p className="mt-1 text-[11px] text-red-700">{message}</p> : null;
 }

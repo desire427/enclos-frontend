@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
+import { clean, validateSimpleRecord } from '../../utils/validation';
 
 const inputCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
 
@@ -37,11 +38,12 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!nom.trim()) { setError(`Le nom est obligatoire.`); return; }
+    const validation = validateSimpleRecord(nom, description);
+    if (validation.message) { setError(validation.message); return; }
     setError('');
     try {
       setSaving(true);
-      await onConfirm(nom.trim(), description.trim());
+      await onConfirm(clean(nom), clean(description));
       reset();
       onClose();
     } catch (err) {

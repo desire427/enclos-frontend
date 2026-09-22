@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, Check, Plus, X, Wheat } from 'lucide-react';
 import api from '../../../API/api';
 import useAlimRefs from '../../../hooks/useAlimRefs';
 import CreateSimpleModal from '../../../components/common/CreateSimpleModal';
+import { clean, validateAnimal, validateDate, validateNumber, validateSimpleRecord } from '../../../utils/validation';
 
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -121,7 +122,8 @@ export default function AjoutAnimal() {
   /* Créer une nouvelle race */
   async function handleCreateRace(e) {
     e.preventDefault();
-    if (!newRaceNom.trim()) { setRaceModalError('Le nom est obligatoire.'); return; }
+    const validation = validateSimpleRecord(newRaceNom, newRaceDesc);
+    if (validation.message) { setRaceModalError(validation.message); return; }
     setRaceModalError('');
     try {
       setCreatingRace(true);
@@ -156,11 +158,23 @@ export default function AjoutAnimal() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const animalValidation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations });
+    if (animalValidation.message) {
+      setError(animalValidation.message);
+      return;
+    }
+    if (withAlim) {
+      const alimError = !alimType ? "Le type d'aliment est obligatoire." : !alimQte ? 'La quantité est obligatoire.' : validateNumber(alimQte, 'La quantité', { positive: true, max: 100000, decimals: 2 }) || validateDate(alimDate, 'La date', { notFuture: true });
+      if (alimError) {
+        setError(alimError);
+        return;
+      }
+    }
     try {
       setSaving(true);
       // 1. Créer l'animal
       const animal = await api.createAnimal({
-        nom,
+        nom: clean(nom),
         espece,
         race:            race          || null,
         sexe,
@@ -168,8 +182,8 @@ export default function AjoutAnimal() {
         poids_naissance: poids         || 0,
         presence,
         etat_sante:      etatSante,
-        couleur,
-        observations,
+        couleur: clean(couleur),
+        observations: clean(observations),
       });
 
       // 2. Si alimentation renseignée, l'enregistrer

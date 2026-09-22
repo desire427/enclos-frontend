@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Check, Trash2 } from 'lucide-react';
 import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
+import { clean, validateSante } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -66,6 +67,11 @@ export default function ModifierSante() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    const validation = validateSante({ animalId, statut, dateDebut, dateProchain, poidsKg, temperature, frequenceCardiaque, note }, isNew);
+    if (validation.message) {
+      setError(validation.message);
+      return;
+    }
     try {
       setSaving(true);
       const payload = {
@@ -75,7 +81,7 @@ export default function ModifierSante() {
         poids_kg:                     poidsKg === '' ? null : Number(poidsKg),
         temperature_celsius:          temperature === '' ? null : Number(temperature),
         frequence_cardiaque:          frequenceCardiaque === '' ? null : Number(frequenceCardiaque),
-        note,
+        note: clean(note),
         ...(isNew ? { animal: Number(animalId) } : {}),
       };
       if (isNew) {

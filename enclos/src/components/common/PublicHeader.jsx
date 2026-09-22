@@ -47,20 +47,20 @@ export default function PublicHeader({ mode = 'landing', currentStep = 1 }) {
   // mode === "landing"
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-[#171310]/10">
-      <div className="max-w-7xl mx-auto px-6 lg:px-10">
-        <div className="h-20 flex items-center justify-between">
+      <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-10 2xl:px-14">
+        <div className="min-h-20 flex items-center justify-between gap-8 py-3">
           <Link to="/" className="flex items-center w-[160px] shrink-0">
             <img src={Logo} alt="Enclos" />
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-9 text-[15px] font-medium text-[#171310]">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-9 text-[15px] font-medium text-[#171310]">
             <a href="#accueil" className="hover:text-[#5C3A21] transition-colors">Accueil</a>
             <a href="#fonctionnalites" className="hover:text-[#5C3A21] transition-colors">Fonctionnalités</a>
             <a href="#tarifs" className="hover:text-[#5C3A21] transition-colors">Tarifs</a>
             <a href="#contact" className="hover:text-[#5C3A21] transition-colors">Contact</a>
           </nav>
 
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
             <Link
               to="/connexion"
               className="px-5 py-2.5 rounded-lg text-[15px] font-medium text-[#171310] border-[1.5px] border-[#171310] hover:bg-[#171310] hover:text-white transition-colors"
