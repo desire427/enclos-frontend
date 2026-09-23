@@ -20,6 +20,23 @@ export default function AppHeader({ onMenuOpen }) {
     load();
   }, []);
 
+  useEffect(() => {
+    const fermeId = localStorage.getItem('enclos_ferme_id');
+    const token = localStorage.getItem('enclos_access_token');
+    if (!fermeId || !token) return undefined;
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+    const apiUrl = new URL(apiBase);
+    apiUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(`${apiUrl.origin}/ws/alertes/${fermeId}/?token=${encodeURIComponent(token)}`);
+    socket.onmessage = event => {
+      const alerte = JSON.parse(event.data);
+      setAlertes(prev => [alerte, ...prev.filter(item => item.id !== alerte.id)]);
+    };
+
+    return () => socket.close();
+  }, []);
+
   const nonLues = alertes.filter(a => a.statut === 'non_lue' || a.statut === 'Non lue').length;
 
   async function handleMarkOne(id) {
