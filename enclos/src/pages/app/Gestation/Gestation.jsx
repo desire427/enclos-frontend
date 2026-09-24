@@ -147,7 +147,7 @@ export default function Gestation() {
           { label: 'Imminentes (≤ 30j)', value: imminentes, icon: AlertTriangle, accent: true  },
           { label: 'Terminées',          value: terminees,  icon: CheckCircle,  accent: false },
         ].map(({ label, value, icon: Icon, accent }) => (
-          <div key={label} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 shadow-sm">
+          <div key={label} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 /* shadow-[0_1px_2px_rgba(0,0,0,0.05)] */">
             <div className="flex items-center justify-between">
               <div className="text-[12px] uppercase tracking-wide text-[#171310]/50 font-medium">{label}</div>
               <Icon className={`w-4 h-4 ${accent ? 'text-[#5C3A21]' : 'text-[#171310]/30'}`} />

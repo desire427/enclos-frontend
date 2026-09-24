@@ -82,7 +82,7 @@ export default function DetailSante() {
           { label: 'Passage vétérinaire', icon: Stethoscope, accent: false, content: <span className="text-[18px] font-bold text-[#171310]">{dateVet || '—'}</span> },
           { label: 'Prochaine consultation', icon: Calendar, accent: false, content: <span className="text-[18px] font-bold text-[#171310]">{dateConsult || '—'}</span> },
         ].map(({ label: lbl, icon: Icon, accent, content }) => (
-          <div key={lbl} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 shadow-sm">
+          <div key={lbl} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 /* shadow-[0_1px_2px_rgba(0,0,0,0.05)] */">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[12px] uppercase tracking-wide text-[#171310]/50 font-medium">{lbl}</div>
               <Icon className={`w-4 h-4 ${accent ? 'text-[#5C3A21]' : 'text-[#171310]/30'}`} />

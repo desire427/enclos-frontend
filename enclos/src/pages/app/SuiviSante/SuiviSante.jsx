@@ -92,7 +92,7 @@ export default function SuiviSante() {
           { label: 'Guéris (mois)', value: suivis.filter(s => listValue(s, ['statut', 'status'], '') === 'Guéri').length,         accent: false },
           { label: 'Suivis actifs', value: suivis.length,                                                                         accent: false },
         ].map(({ label, value, accent }) => (
-          <div key={label} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 shadow-sm">
+          <div key={label} className="rounded-2xl border border-[#E5E5E3] bg-white p-5 /* shadow-[0_1px_2px_rgba(0,0,0,0.05)] */">
             <div className="flex items-center justify-between">
               <div className="text-[12px] uppercase tracking-wide text-[#171310]/50 font-medium">{label}</div>
               <HeartPulse className={`w-4 h-4 ${accent ? 'text-[#5C3A21]' : 'text-[#171310]/30'}`} />
