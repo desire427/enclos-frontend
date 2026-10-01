@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Check, Plus, X, Wheat } from 'lucide-react';
 import api from '../../../API/api';
@@ -76,6 +76,75 @@ export default function AjoutAnimal() {
   const [etatSante,     setEtatSante]     = useState('sain');
   const [couleur,       setCouleur]       = useState('');
   const [observations,  setObservations]  = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [photoConfirmed, setPhotoConfirmed] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoRef = useRef(null);
+  const cameraStream = useRef(null);
+
+  useEffect(() => {
+    if (!photo) { setPhotoPreview(''); return undefined; }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  useEffect(() => {
+    if (cameraOpen && videoRef.current && cameraStream.current) {
+      videoRef.current.srcObject = cameraStream.current;
+      videoRef.current.play().catch(() => setCameraError('Impossible de démarrer l’aperçu caméra.'));
+    }
+  }, [cameraOpen]);
+
+  useEffect(() => () => cameraStream.current?.getTracks().forEach(track => track.stop()), []);
+
+  async function openCamera() {
+    setCameraError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('La caméra nécessite un navigateur compatible et une connexion sécurisée (HTTPS ou localhost).');
+      return;
+    }
+    try {
+      cameraStream.current = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      });
+      setCameraOpen(true);
+    } catch (err) {
+      const message = err.name === 'NotAllowedError'
+        ? 'L’accès à la caméra est refusé. Autorisez la caméra dans les réglages du navigateur puis réessayez.'
+        : err.name === 'NotFoundError'
+          ? 'Aucune caméra n’a été détectée sur cet appareil.'
+          : 'Impossible d’ouvrir la caméra. Vérifiez qu’elle n’est pas déjà utilisée par une autre application.';
+      setCameraError(message);
+    }
+  }
+
+  function closeCamera() {
+    cameraStream.current?.getTracks().forEach(track => track.stop());
+    cameraStream.current = null;
+    setCameraOpen(false);
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current;
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setCameraError('La caméra n’est pas encore prête. Patientez un instant puis réessayez.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (!blob) { setCameraError('La photo n’a pas pu être créée. Réessayez.'); return; }
+      setPhoto(new File([blob], `animal-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      setError('');
+      closeCamera();
+    }, 'image/jpeg', 0.92);
+  }
 
   /* ── Alimentation optionnelle ── */
   const [withAlim,    setWithAlim]    = useState(false);
@@ -158,7 +227,7 @@ export default function AjoutAnimal() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const animalValidation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations });
+    const animalValidation = validateAnimal({ photo, nom, espece, sexe, dateNaissance, poids, couleur, observations });
     if (animalValidation.message) {
       setError(animalValidation.message);
       return;
@@ -173,18 +242,21 @@ export default function AjoutAnimal() {
     try {
       setSaving(true);
       // 1. Créer l'animal
-      const animal = await api.createAnimal({
+      const animalPayload = {
         nom: clean(nom),
         espece,
         race:            race          || null,
         sexe,
         date_naissance:  dateNaissance || null,
-        poids_naissance: poids         || 0,
+        poids_actuel:    poids         || 0,
         presence,
         etat_sante:      etatSante,
         couleur: clean(couleur),
         observations: clean(observations),
-      });
+      };
+      let animal;
+      if (photo) { const form = new FormData(); Object.entries(animalPayload).forEach(([key, value]) => form.append(key, value ?? '')); form.append('photo', photo); animal = await api.createAnimal(form); }
+      else animal = await api.createAnimal(animalPayload);
 
       // 2. Si alimentation renseignée, l'enregistrer
       if (withAlim && alimType && alimQte && alimDate) {
@@ -221,9 +293,25 @@ export default function AjoutAnimal() {
 
       {error && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+      {!photoConfirmed && <section className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#171310]/50">Étape 1 sur 2</p>
+        <h2 className="mt-2 font-serif text-[21px] text-[#171310]">Photographiez l’animal</h2>
+        <p className="mt-1 text-[13px] text-[#171310]/55">Prenez une photo maintenant ou importez une image. Vous pourrez remplir sa fiche après cette étape.</p>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button type="button" onClick={cameraOpen ? closeCamera : openCamera} className="flex min-h-12 items-center justify-center rounded-xl bg-[#5C3A21] px-4 py-3 text-center text-sm font-semibold text-white hover:bg-[#3B2313]">{cameraOpen ? 'Fermer la caméra' : 'Ouvrir la caméra'}</button>
+          <label htmlFor="animal-photo-first" className="flex min-h-12 cursor-pointer items-center justify-center rounded-xl border border-[#5C3A21]/50 bg-[#FAF9F7] px-4 py-3 text-center text-sm font-medium text-[#5C3A21]">Importer une photo</label>
+          <input id="animal-photo-first" type="file" accept="image/*" onChange={e => { setPhoto(e.target.files?.[0] || null); setError(''); setCameraError(''); }} className="sr-only" />
+        </div>
+        {cameraOpen && <div className="mt-4 overflow-hidden rounded-xl bg-black"><video ref={videoRef} playsInline autoPlay muted className="max-h-[65vh] w-full object-contain" /><div className="flex justify-center p-3"><button type="button" onClick={capturePhoto} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-[#171310]">Prendre la photo</button></div></div>}
+        {cameraError && <p role="alert" className="mt-3 text-sm text-red-600">{cameraError}</p>}
+        {photoPreview && <div className="mt-4"><img src={photoPreview} alt="Photo de l’animal à enregistrer" className="max-h-72 w-full rounded-xl object-cover" /><p className="mt-2 text-xs text-[#171310]/50">{photo?.name}</p></div>}
+        <div className="mt-5 flex justify-end"><button type="button" disabled={!photo} onClick={() => { setError(''); setPhotoConfirmed(true); }} className="h-10 rounded-lg bg-[#5C3A21] px-5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">Continuer vers les informations</button></div>
+      </section>}
+
+      {photoConfirmed && <form noValidate onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
         {/* ── Informations générales ── */}
+        <div className="mb-5 flex items-center gap-4 rounded-xl bg-[#FAF9F7] p-3">{photoPreview && <img src={photoPreview} alt="Photo de l’animal" className="h-16 w-16 rounded-lg object-cover" />}<div className="min-w-0 flex-1"><p className="text-xs font-semibold">Photo de l’animal ajoutée</p><button type="button" onClick={() => setPhotoConfirmed(false)} className="mt-1 text-xs text-[#5C3A21] underline">Changer la photo</button></div></div>
         <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">
           Informations générales
         </p>
@@ -289,8 +377,8 @@ export default function AjoutAnimal() {
               <input id="dateNaissance" type="date" value={dateNaissance} onChange={e => setDateNaissance(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids initial (kg)</label>
-              <input id="poids" type="number" placeholder="0.00" step="0.1" min="0" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
+              <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids actuel (kg) <span className="text-red-600">*</span></label>
+              <input id="poids" type="number" placeholder="0.00" step="0.1" min="0" max="6000" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
             </div>
           </div>
           <div className="mt-4">
@@ -397,7 +485,7 @@ export default function AjoutAnimal() {
             {saving ? 'Enregistrement…' : "Enregistrer l'animal"}
           </button>
         </div>
-      </form>
+      </form>}
 
       {/* ── Modal création de race ── */}
       {showRaceModal && (

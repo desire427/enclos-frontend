@@ -153,13 +153,14 @@ export function validateAlimentation(values) {
   return { errors, message: firstError(errors) };
 }
 
-export function validateAnimal(values) {
+export function validateAnimal(values, { requirePhoto = true } = {}) {
   const errors = {
+    photo: requirePhoto && !values.photo ? required(values.photo, 'La photo de l’animal') : '',
     nom: validateName(values.nom, "Le nom de l'animal", { optional: true, min: 2, max: 100 }),
     espece: validateSelect(values.espece, "L'espèce", ['bovin', 'ovin', 'caprin', 'porcin']),
     sexe: validateSelect(values.sexe, 'Le sexe', ['femelle', 'male']),
     dateNaissance: validateDate(values.dateNaissance, 'La date de naissance', { optional: true, notFuture: true }),
-    poids: validateNumber(values.poids, 'Le poids', { optional: true, min: 0, max: 10000, decimals: 2 }),
+    poids: validateNumber(values.poids, 'Le poids actuel', { min: 0, max: 6000, decimals: 2 }),
     couleur: validateText(values.couleur, 'La couleur', { optional: true, min: 2, max: 100 }),
     observations: validateText(values.observations, 'Les observations', { optional: true, max: 2000 }),
   };
@@ -188,7 +189,7 @@ export function validateSante(values, isNew = true) {
     statut: validateSelect(values.statut, 'Le statut', ['Malade', 'En traitement', 'Guéri', 'Sous surveillance']),
     dateDebut: validateDate(values.dateDebut, 'La date de début', { notFuture: true }),
     dateProchain: validateDate(values.dateProchain, 'La prochaine consultation', { optional: true }),
-    poidsKg: validateNumber(values.poidsKg, 'Le poids', { optional: true, min: 0, max: 10000, decimals: 2 }),
+    poidsKg: validateNumber(values.poidsKg, 'Le poids', { optional: true, min: 0, max: 6000, decimals: 2 }),
     temperature: validateNumber(values.temperature, 'La température', { optional: true, min: 20, max: 50, decimals: 2 }),
     frequenceCardiaque: validateNumber(values.frequenceCardiaque, 'La fréquence cardiaque', { optional: true, min: 1, max: 500, decimals: 0 }),
     note: validateText(values.note, 'La note', { optional: true, max: 2000 }),

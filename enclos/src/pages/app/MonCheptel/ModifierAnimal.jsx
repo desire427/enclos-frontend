@@ -29,6 +29,19 @@ export default function ModifierAnimal() {
   const [etatSante,    setEtatSante]    = useState('sain');
   const [couleur,       setCouleur]       = useState('');
   const [observations,  setObservations]  = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoPreview, setPhotoPreview] = useState('');
+
+  useEffect(() => {
+    if (!photo) {
+      setPhotoPreview('');
+      return undefined;
+    }
+    const previewUrl = URL.createObjectURL(photo);
+    setPhotoPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [photo]);
 
   /* Races dynamiques */
   const [races,         setRaces]         = useState([]);
@@ -47,16 +60,18 @@ export default function ModifierAnimal() {
         setLoading(true);
         const data = await api.getAnimal(id);
         setNumIdent(data.numero_identification || '');
+        setPhotoUrl(data.photo || '');
         setNom(data.nom || '');
         setEspece(data.espece || 'bovin');
         setRace(data.race ? String(data.race) : '');
         setSexe(data.sexe || 'femelle');
         setDateNaissance(data.date_naissance || '');
-        setPoids(data.poids_naissance != null ? String(data.poids_naissance) : '');
+        setPoids(data.poids_actuel != null ? String(data.poids_actuel) : (data.poids_naissance != null ? String(data.poids_naissance) : ''));
         setPresence(data.presence || 'present');
         setEtatSante(data.etat_sante || 'sain');
         setCouleur(data.couleur || '');
         setObservations(data.observations || '');
+        if (data.presence !== 'present') setError('Cet animal est vendu ou mort : sa fiche est consultable, mais ne peut plus être modifiée.');
       } catch (err) {
         setError(err.message || 'Impossible de charger cet animal.');
       } finally {
@@ -86,25 +101,27 @@ export default function ModifierAnimal() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const validation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations });
+    const validation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations }, { requirePhoto: false });
     if (validation.message) {
       setError(validation.message);
       return;
     }
     try {
       setSaving(true);
-      await api.updateAnimal(id, {
+      const animalPayload = {
         nom: clean(nom),
         espece,
         race:            race || null,
         sexe,
         date_naissance:  dateNaissance || null,
-        poids_naissance: poids || 0,
+        poids_actuel: poids || 0,
         presence,
         etat_sante:      etatSante,
         couleur: clean(couleur),
         observations: clean(observations),
-      });
+      };
+      if (photo) { const form = new FormData(); Object.entries(animalPayload).forEach(([key, value]) => form.append(key, value ?? '')); form.append('photo', photo); await api.updateAnimal(id, form); }
+      else await api.updateAnimal(id, animalPayload);
       // Si l'état de santé est "gestation", ouvrir le formulaire de gestation
       // Si l'état de santé est "malade" ou "en_traitement", ouvrir le formulaire de suivi santé
       if (etatSante === 'gestation') {
@@ -142,8 +159,8 @@ export default function ModifierAnimal() {
       {error   && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
       {loading && <div className="mt-4 text-[13px] text-[#171310]/50">Chargement…</div>}
 
-      {!loading && (
-        <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+      {!loading && presence !== 'present' ? (photoUrl && <img src={photoUrl} alt="Photo de l’animal" className="mt-5 h-56 w-80 rounded-2xl object-cover" />) : !loading && (
+        <form noValidate onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
           {/* ── Informations générales ── */}
           <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">
@@ -193,7 +210,8 @@ export default function ModifierAnimal() {
             </div>
           </div>
 
-          {/* Sexe + Date de naissance */}
+          <div className="mb-5"><label className="block text-[13px] font-semibold text-[#171310] mb-2">Photo de l’animal</label>{(photoPreview || photoUrl) && <img src={photoPreview || photoUrl} alt="Aperçu de l’animal" className="mb-3 h-36 w-36 rounded-xl object-cover" />}<input type="file" accept="image/*" capture="environment" onChange={e => setPhoto(e.target.files?.[0] || null)} className="text-sm" />{photo && <p className="mt-1 text-xs text-[#171310]/50">Nouvelle photo sélectionnée — elle sera enregistrée avec la fiche.</p>}</div>
+        {/* Sexe + Date de naissance */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-[13px] font-semibold text-[#171310] mb-2">Sexe</label>
@@ -216,8 +234,8 @@ export default function ModifierAnimal() {
           {/* Poids + Couleur */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
-              <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids (kg)</label>
-              <input id="poids" type="number" step="0.1" min="0" placeholder="0.00" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
+              <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids actuel (kg) <span className="text-red-600">*</span></label>
+              <input id="poids" type="number" step="0.1" min="0" max="6000" placeholder="0.00" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label htmlFor="couleur" className="block text-[13px] font-semibold text-[#171310] mb-2">

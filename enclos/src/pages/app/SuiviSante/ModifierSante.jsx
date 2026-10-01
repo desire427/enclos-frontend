@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Check, Trash2 } from 'lucide-react';
 import api from '../../../API/api';
@@ -37,6 +37,18 @@ export default function ModifierSante() {
   const [frequenceCardiaque, setFrequenceCardiaque] = useState('');
   const [note,        setNote]        = useState('');
   const [animalLabel, setAnimalLabel] = useState('');
+  const [voiceText, setVoiceText] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    if (isNew && animalId && !poidsKg) {
+      const animal = animals.find(item => String(item.id) === String(animalId));
+      const poidsAnimal = animal?.poids_actuel ?? animal?.poids_naissance;
+      if (poidsAnimal != null) setPoidsKg(String(poidsAnimal));
+    }
+  }, [animals, animalId, isNew]);
 
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
@@ -64,9 +76,127 @@ export default function ModifierSante() {
     load();
   }, [id, isNew]);
 
+
+  function applyDictation(text) {
+    const spoken = text.trim();
+    if (!spoken) return;
+    setVoiceText(spoken);
+    const normalized = spoken.toLocaleLowerCase('fr-FR');
+    const statusMatch = [
+      [/\b(en traitement|sous traitement)\b/, 'En traitement'],
+      [/\b(sous surveillance|surveillance)\b/, 'Sous surveillance'],
+      [/\b(gu[eé]ri|r[eé]tabli)\b/, 'Guéri'],
+      [/\b(malade|malade)\b/, 'Malade'],
+    ].find(([pattern]) => pattern.test(normalized));
+    if (statusMatch) setStatut(statusMatch[1]);
+
+    const findDate = (pattern) => {
+      const match = normalized.match(pattern);
+      if (!match) return null;
+      const dateMatch = match[1].match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b|\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/);
+      if (!dateMatch) return null;
+      if (dateMatch[1]) return `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+      return `${dateMatch[6]}-${dateMatch[5].padStart(2, '0')}-${dateMatch[4].padStart(2, '0')}`;
+    };
+    const startDate = findDate(/(?:date de d[eé]but|d[eé]but|depuis)(?: le)?\s+([^,;.]+)/);
+    const nextDate = findDate(/(?:prochaine consultation|prochain rendez-vous|revoir)(?: pr[eé]vu| pr[eé]vue)?(?: le)?\s+([^,;.]+)/);
+    if (startDate) setDateDebut(startDate);
+    if (nextDate) setDateProchain(nextDate);
+
+    const parseMeasure = (pattern, convert = value => value) => {
+      const match = normalized.match(pattern);
+      if (!match) return null;
+      const number = Number(match[1].replace(',', '.'));
+      return Number.isFinite(number) ? convert(number, match[2]) : null;
+    };
+    const weight = parseMeasure(/(?:poids|p[eè]se|pes[eé]e?)(?: actuel)?(?: de| [eé]gal [aà])?\s*(\d+(?:[,.]\d+)?)\s*(kg|kilos?|g|grammes?)?\b/, (value, unit) => unit && /^(g|grammes?)$/.test(unit) ? value / 1000 : value);
+    const temp = parseMeasure(/(?:temp[eé]rature|temp[eé]rature corporelle)(?: de| [eé]gale [aà])?\s*(\d+(?:[,.]\d+)?)/);
+    const pulse = parseMeasure(/(?:fr[eé]quence cardiaque|pouls|battements)(?: de| [eé]gale [aà])?\s*(\d+(?:[,.]\d+)?)/);
+    if (weight !== null && weight <= 6000) setPoidsKg(String(weight));
+    if (temp !== null) setTemperature(String(temp));
+    if (pulse !== null) setFrequenceCardiaque(String(Math.round(pulse)));
+    setNote(current => current ? `${current}\n${spoken}` : spoken);
+    setVoiceError('Dictée retranscrite. Les valeurs reconnues ont été proposées; vérifiez les champs avant d’enregistrer.');
+  }
+
+  async function startVoiceEntry() {
+    setVoiceError('');
+    if (!animalId) {
+      setVoiceError('Choisissez d’abord l’animal concerné.');
+      return;
+    }
+    if (!window.isSecureContext) {
+      setVoiceError('La dictée nécessite une connexion sécurisée (HTTPS) ou localhost.');
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError('La dictée vocale n’est pas prise en charge par ce navigateur. Vous pouvez remplir les champs manuellement.');
+      return;
+    }
+
+    let microphoneStream;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setVoiceError('Ce navigateur ne donne pas accès au microphone pour la dictée.');
+        return;
+      }
+      // Vérifier explicitement le microphone : l’erreur du moteur vocal ne distingue
+      // pas toujours un refus micro d’une indisponibilité de son service de reconnaissance.
+      microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphoneStream.getTracks().forEach(track => track.stop());
+      microphoneStream = null;
+    } catch (error) {
+      const messages = {
+        NotAllowedError: 'L’accès au microphone est refusé pour ce site. Vérifiez les permissions du site dans le navigateur.',
+        NotFoundError: 'Aucun microphone n’a été détecté sur cet appareil.',
+        NotReadableError: 'Le microphone est utilisé par une autre application ou ne peut pas être ouvert.',
+        SecurityError: 'Le navigateur bloque le microphone pour cette adresse. Utilisez localhost ou HTTPS.',
+      };
+      setVoiceError(messages[error.name] || `Impossible d’ouvrir le microphone (${error.name || 'erreur inconnue'}).`);
+      microphoneStream?.getTracks().forEach(track => track.stop());
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognitionRef.current = recognition;
+    recognition.onstart = () => setListening(true);
+    recognition.onerror = event => {
+      setListening(false);
+      const messages = {
+        'not-allowed': 'Le microphone est accessible, mais le moteur vocal du navigateur refuse la dictée. Vérifiez que la reconnaissance vocale est activée et que le navigateur peut accéder à son service vocal.',
+        'service-not-allowed': 'Le service de reconnaissance vocale du navigateur est indisponible ou bloqué. Réessayez plus tard ou remplissez le formulaire manuellement.',
+        network: 'Le service de reconnaissance vocale est inaccessible. Vérifiez la connexion Internet du navigateur.',
+        'audio-capture': 'Le navigateur ne parvient pas à capter le son du microphone.',
+        'no-speech': 'Aucune parole n’a été détectée. Parlez après le démarrage de l’écoute puis réessayez.',
+        aborted: 'La dictée a été interrompue.',
+      };
+      setVoiceError(messages[event.error] || `La dictée a échoué (${event.error || 'erreur inconnue'}).`);
+    };
+    recognition.onresult = event => {
+      const transcript = Array.from(event.results).map(result => result[0].transcript).join(' ');
+      applyDictation(transcript);
+    };
+    recognition.onend = () => setListening(false);
+    try {
+      recognition.start();
+      setVoiceError('Microphone prêt. Parlez maintenant.');
+    } catch (error) {
+      setListening(false);
+      setVoiceError(`Impossible de démarrer la dictée (${error.name || 'erreur inconnue'}). Réessayez.`);
+    }
+  }
+
+  const selectedAnimal = animals.find(item => String(item.id) === String(animalId));
+  const animalArchived = Boolean(selectedAnimal && selectedAnimal.presence !== 'present');
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (animalArchived) { setError('Impossible de modifier un suivi ou rendez-vous pour un animal vendu ou mort.'); return; }
     const validation = validateSante({ animalId, statut, dateDebut, dateProchain, poidsKg, temperature, frequenceCardiaque, note }, isNew);
     if (validation.message) {
       setError(validation.message);
@@ -131,7 +261,8 @@ export default function ModifierSante() {
 
       {error && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+      {animalArchived && <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Cet animal est vendu ou mort. Son suivi et son historique restent consultables, mais ne peuvent plus être modifiés.</div>}
+      {!animalArchived && <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
         {/* Animal (création uniquement) */}
         {isNew && (
@@ -143,13 +274,23 @@ export default function ModifierSante() {
                 <option value="">Sélectionner un animal</option>
                 {animalsLoading
                   ? <option disabled>Chargement…</option>
-                  : animals.map(a => <option key={a.id} value={a.id}>{animalOptionLabel(a)}</option>)
+                  : animals.filter(a => a.presence === 'present').map(a => <option key={a.id} value={a.id}>{animalOptionLabel(a)}</option>)
                 }
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
             </div>
           </div>
         )}
+
+        {/* Saisie vocale optionnelle; les champs restent toujours modifiables manuellement. */}
+        <section className="mb-6 rounded-xl border border-[#E5E5E3] bg-[#FAF9F7] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><p className="text-sm font-semibold text-[#171310]">Remplir en parlant</p><p className="mt-1 text-xs text-[#171310]/55">Choisissez l’animal, dictez les informations utiles, puis vérifiez les champs proposés.</p></div>
+            <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startVoiceEntry} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white">{listening ? 'Arrêter la dictée' : 'Dicter les informations'}</button>
+          </div>
+          {voiceText && <p className="mt-3 rounded-lg bg-white p-3 text-xs text-[#171310]/75"><strong>Transcription :</strong> {voiceText}</p>}
+          {voiceError && <p role="status" className={`mt-2 text-xs ${listening ? 'text-[#5C3A21]' : 'text-[#171310]/65'}`}>{listening ? 'Écoute en cours…' : voiceError}</p>}
+        </section>
 
         {/* Données du suivi */}
         <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">Données du suivi</p>
@@ -231,9 +372,9 @@ export default function ModifierSante() {
             </button>
           </div>
         </div>
-      </form>
+      </form>}
 
-      {showDelete && (
+      {showDelete && !animalArchived && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowDelete(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

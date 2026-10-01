@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, HeartPulse, Calendar, Clock, Pencil, Stethoscope } from 'lucide-react';
 import api from '../../../API/api';
+import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
 
 const STATUT_BADGE = {
   'Malade': 'bg-red-50 text-red-600',
@@ -15,13 +16,27 @@ export default function DetailSante() {
   const [sante, setSante] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [animal, setAnimal] = useState(null);
+  const [ordonnances, setOrdonnances] = useState([]);
+  const [showOrdonnanceForm, setShowOrdonnanceForm] = useState(false);
+  const [ordonnanceError, setOrdonnanceError] = useState('');
+  const [savingOrdonnance, setSavingOrdonnance] = useState(false);
+  const ordonnanceFormRef = useRef(null);
 
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const data = await api.getSante(id);
+        const data = await api.getSanteById(id);
         setSante(data);
+        const linkedAnimalId = data.animal_id || data.animal;
+        const [animalData, prescriptionData] = await Promise.all([
+          api.getAnimal(linkedAnimalId).catch(() => null),
+          api.getOrdonnances(linkedAnimalId).catch(() => []),
+        ]);
+        setAnimal(animalData);
+        const prescriptions = Array.isArray(prescriptionData) ? prescriptionData : (prescriptionData?.results || []);
+        setOrdonnances(prescriptions.filter(item => Number(item.suivi_sante) === Number(id)));
       } catch (err) {
         setError(err.message || 'Impossible de charger ce suivi santé.');
       } finally {
@@ -31,12 +46,41 @@ export default function DetailSante() {
     if (id) load();
   }, [id]);
 
+  function applyOrdonnanceDictation(transcript) {
+    const form = ordonnanceFormRef.current;
+    if (!form) return;
+    const split = transcript.match(/\b(?:instructions?|consignes?|posologie)\b\s*[:,—-]?\s*(.*)$/i);
+    const medicaments = split ? transcript.slice(0, split.index).trim() : transcript;
+    if (medicaments) form.elements.namedItem('medicaments').value = medicaments.replace(/^\s*(?:m[eé]dicaments?)\s*[:,—-]?\s*/i, '');
+    if (split?.[1]) form.elements.namedItem('instructions').value = split[1].trim();
+  }
+
+  async function handleCreateOrdonnance(event) {
+    event.preventDefault();
+    setOrdonnanceError('');
+    const form = event.currentTarget;
+    const payload = new FormData(form);
+    payload.append('animal', String(sante.animal_id || sante.animal));
+    payload.append('suivi_sante', String(id));
+    try {
+      setSavingOrdonnance(true);
+      const created = await api.createOrdonnance(payload);
+      setOrdonnances(previous => [created, ...previous]);
+      setShowOrdonnanceForm(false);
+      form.reset();
+    } catch (err) {
+      setOrdonnanceError(err.message || 'Impossible d’enregistrer cette ordonnance.');
+    } finally {
+      setSavingOrdonnance(false);
+    }
+  }
+
   if (loading) return <div className="text-[12px] text-[#171310]/50">Chargement du suivi...</div>;
   if (error) return <div className="text-[12px] text-red-600">{error}</div>;
   if (!sante) return <div className="text-[12px] text-[#171310]/50">Aucune donnée.</div>;
 
   const animalName = sante.animal_nom || sante.animal?.nom || sante.animalId || 'Animal';
-  const animalId = sante.animal_id || sante.animalId || sante.animal?.id || sante.id;
+  const animalId = sante.animal_id || sante.animal?.id || sante.animal || '';
   const stat = sante.statut || sante.status || 'Non précisé';
   const dateDebut = sante.date_debut || sante.dateDebut || '—';
   const dateVet = sante.date_passage_veterinaire || sante.datePassageVeterinaire || sante.date_veto || '—';
@@ -129,6 +173,24 @@ export default function DetailSante() {
           </Link>
         </div>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-[#E5E5E3] bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-serif text-[18px] font-medium text-[#171310]">Ordonnances liées à ce suivi</h2><p className="mt-1 text-xs text-[#171310]/55">Enregistrez et retrouvez ici les prescriptions de cette consultation.</p></div>{animal?.presence === 'present' && <button type="button" onClick={() => { setShowOrdonnanceForm(value => !value); setOrdonnanceError(''); }} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white">{showOrdonnanceForm ? 'Fermer' : 'Ajouter une ordonnance'}</button>}</div>
+        {animal && animal.presence !== 'present' && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Animal vendu ou mort : les ordonnances restent consultables, mais ne peuvent plus être ajoutées.</p>}
+        {showOrdonnanceForm && <form ref={ordonnanceFormRef} onSubmit={handleCreateOrdonnance} className="mt-5 grid gap-3 sm:grid-cols-2">
+          <input name="titre" required maxLength="150" placeholder="Titre de l’ordonnance" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+          <input name="veterinaire" maxLength="150" placeholder="Vétérinaire" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+          <input name="date_prescription" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+          <input name="document" type="file" accept="application/pdf,image/*" className="text-xs" />
+          <textarea name="medicaments" required maxLength="5000" placeholder="Médicaments prescrits" className="min-h-20 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
+          <VoiceDictationButton onTranscript={applyOrdonnanceDictation} />
+          <textarea name="instructions" maxLength="5000" placeholder="Instructions du vétérinaire" className="min-h-16 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
+          {ordonnanceError && <p className="text-xs text-red-600 sm:col-span-2">{ordonnanceError}</p>}
+          <button type="submit" disabled={savingOrdonnance} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-sm text-white disabled:opacity-60 sm:col-span-2">{savingOrdonnance ? 'Enregistrement…' : 'Enregistrer l’ordonnance'}</button>
+        </form>}
+        {ordonnances.length ? <ul className="mt-5 divide-y divide-[#E5E5E3]">{ordonnances.map(ord => <li key={ord.id} className="py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[#171310]">{ord.titre}</h3><p className="mt-1 text-xs text-[#171310]/55">{ord.date_prescription} · {ord.veterinaire || 'Vétérinaire non précisé'}</p><p className="mt-2 whitespace-pre-wrap text-sm text-[#171310]/80">{ord.medicaments}</p>{ord.instructions && <p className="mt-2 whitespace-pre-wrap text-xs text-[#171310]/65">Instructions : {ord.instructions}</p>}</div>{ord.document && <a className="text-xs text-[#5C3A21] underline" href={ord.document} target="_blank" rel="noreferrer">Ouvrir le document</a>}</div></li>)}</ul> : <p className="mt-4 rounded-lg bg-[#F5F4F2] p-4 text-sm text-[#171310]/55">Aucune ordonnance liée à ce suivi pour le moment.</p>}
+        <Link to={`/cheptel/${animalId}#sante`} className="mt-4 inline-flex text-xs font-medium text-[#5C3A21] underline">Ouvrir le carnet de santé de l’animal</Link>
+      </section>
     </>
   );
 }

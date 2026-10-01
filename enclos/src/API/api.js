@@ -95,7 +95,9 @@ async function request(url, options = {}) {
   // Récupère le token depuis les options s'il est fourni explicitement, sinon chaîne vide
   const explicitToken = options.token || '';
   // Construit les en-têtes HTTP avec authentification en utilisant le token
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = authHeaders(explicitToken);
+  if (isFormData) delete headers['Content-Type'];
 
   // Effectue la requête HTTP avec l'API fetch native du navigateur
   const response = await fetch(url, {
@@ -420,7 +422,7 @@ export const api = {
     return request(`${SUBSCRIPTIONS_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -475,7 +477,7 @@ export const api = {
     return request(`${RACES_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -498,7 +500,7 @@ export const api = {
     return request(`${MONCHEPTEL_URL}/`, {
       method: 'POST', // Méthode HTTP POST pour créer un nouvel animal
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données de l'animal
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -513,6 +515,28 @@ export const api = {
     });
   },
 
+  async getAnimalQr(id) {
+    return request(`${MONCHEPTEL_URL}/${id}/qr/`, { method: 'GET', token: getStoredToken() });
+  },
+
+  async getOrdonnances(animalId) {
+    return request(`${SANTE_URL.replace('/sante', '/ordonnances')}/?animal=${animalId}`, { method: 'GET', token: getStoredToken() });
+  },
+
+  async createOrdonnance(payload) {
+    const url = `${SANTE_URL.replace('/sante', '/ordonnances')}/`;
+    return request(url, { method: 'POST', token: getStoredToken(), body: payload instanceof FormData ? payload : JSON.stringify(payload) });
+  },
+
+  async updateOrdonnance(id, payload) {
+    const url = `${SANTE_URL.replace('/sante', '/ordonnances')}/${id}/`;
+    return request(url, { method: 'PATCH', token: getStoredToken(), body: payload instanceof FormData ? payload : JSON.stringify(payload) });
+  },
+
+  async deleteOrdonnance(id) {
+    return request(`${SANTE_URL.replace('/sante', '/ordonnances')}/${id}/`, { method: 'DELETE', token: getStoredToken() });
+  },
+
   // Méthode pour mettre à jour un animal existant
   // @param id - L'identifiant unique de l'animal à mettre à jour
   // @param payload - Objet contenant les données à mettre à jour (nom, poids, statut, etc.)
@@ -522,7 +546,7 @@ export const api = {
     return request(`${MONCHEPTEL_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -596,7 +620,7 @@ export const api = {
     return request(`${TYPE_ALIMENT_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -644,7 +668,7 @@ export const api = {
     return request(`${FREQUENCE_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -679,7 +703,7 @@ export const api = {
     return request(`${ALIMENTATION_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -766,7 +790,7 @@ export const api = {
     return request(`${GESTATION_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -796,6 +820,11 @@ export const api = {
       method: 'GET', // Méthode HTTP GET pour récupérer les suivis de santé
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
     });
+  },
+
+  async getSuivisSante(animalId) {
+    const suffix = animalId ? `/?animal=${encodeURIComponent(animalId)}` : '/';
+    return request(`${SANTE_URL}${suffix}`, { method: 'GET', token: getStoredToken() });
   },
 
   // Méthode pour récupérer le suivi de santé ouvert (non terminé) d'un animal
@@ -850,7 +879,7 @@ export const api = {
     return request(`${SANTE_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -888,7 +917,7 @@ export const api = {
     return request(`${ALERTES_URL}/${id}/`, {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
-      body: JSON.stringify(payload), // Corps avec les données à mettre à jour
+      body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
     });
   },
 
@@ -918,6 +947,13 @@ export const api = {
     return request(`${IA_URL}/predictions${suffix}`, {
       method: 'GET', // Méthode HTTP GET pour récupérer les prédictions
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
+    });
+  },
+
+  async preDiagnostic(payload) {
+    return request(`${IA_URL}/pre-diagnostic/`, {
+      method: 'POST', token: getStoredToken(),
+      body: payload instanceof FormData ? payload : JSON.stringify(payload),
     });
   },
 

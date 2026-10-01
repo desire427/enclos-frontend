@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import QrScanner from 'qr-scanner';
 import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../../../API/api';
 import FilterDropdown from '../../../components/common/FilterDropdown';
@@ -33,6 +34,23 @@ function animalLabel(a) {
   return a.nom?.trim() ? a.nom : a.numero_identification;
 }
 
+async function getAnimalIdFromQr(value) {
+  if (value.startsWith('ENCLOS1:')) {
+    const b64 = value.slice('ENCLOS1:'.length).replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), char => char.charCodeAt(0));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const decoded = JSON.parse(await new Response(stream).text());
+    return decoded.animal?.id || null;
+  }
+  try {
+    const url = new URL(value);
+    const match = url.pathname.match(/\/cheptel\/(\d+)\/?$/);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Page principale                                                      */
 /* ------------------------------------------------------------------ */
@@ -41,6 +59,11 @@ export default function MonCheptel() {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState('');
   const [page, setPage]               = useState(1);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const videoRef = useRef(null);
+  const qrFileRef = useRef(null);
+  const navigate = useNavigate();
 
   /* Filtres */
   const [search, setSearch]                 = useState('');
@@ -62,6 +85,44 @@ export default function MonCheptel() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+    let scanner;
+    let stopped = false;
+    async function startScanner() {
+      try {
+        if (!videoRef.current) throw new Error('La caméra ne peut pas être affichée. Fermez le scanner et réessayez.');
+        const activeScanner = new QrScanner(videoRef.current, async result => {
+          if (!result || stopped) return;
+          try {
+            const animalId = await getAnimalIdFromQr(result.data);
+            if (!animalId) {
+              setScanError('Ce QR code ne contient pas une fiche animal Enclos reconnue.');
+              return;
+            }
+            stopped = true;
+            activeScanner.stop();
+            setScannerOpen(false);
+            navigate(`/cheptel/${animalId}`);
+          } catch {
+            setScanError('Impossible de lire ce QR code. Essayez une image plus nette ou rapprochez le code de la caméra.');
+          }
+        }, { preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: true, highlightCodeOutline: true });
+        scanner = activeScanner;
+        await activeScanner.start();
+        if (stopped) activeScanner.destroy();
+      } catch (err) {
+        if (!stopped) {
+          setScanError(err.name === 'NotAllowedError'
+            ? 'Autorisez l’accès à la caméra dans votre navigateur pour scanner un QR code.'
+            : err.message || 'Impossible d’ouvrir la caméra.');
+        }
+      }
+    }
+    startScanner();
+    return () => { stopped = true; scanner?.destroy(); };
+  }, [scannerOpen, navigate]);
 
   function resetPage() { setPage(1); }
 
@@ -97,6 +158,23 @@ export default function MonCheptel() {
           <h1 className="font-serif text-[28px] leading-tight text-[#171310]">Mon Cheptel</h1>
           <p className="mt-1 text-[13px] text-[#171310]/50">Gérez la liste de vos animaux</p>
         </div>
+        <div className="flex gap-2 self-start">
+          <button type="button" onClick={() => { setScanError(''); setScannerOpen(value => !value); }} className="h-9 rounded-lg border border-[#5C3A21] px-3 text-[13px] font-medium text-[#5C3A21]">{scannerOpen ? 'Fermer le scanner' : 'Scanner un QR'}</button>
+          <button type="button" onClick={() => { setScanError(''); qrFileRef.current?.click(); }} className="h-9 rounded-lg border border-[#E5E5E3] px-3 text-[13px] font-medium text-[#171310]">Importer un QR</button>
+          <input ref={qrFileRef} type="file" accept="image/*" className="hidden" onChange={async event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            try {
+              const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true, alsoTryWithoutScanRegion: true });
+              const animalId = await getAnimalIdFromQr(result.data);
+              if (!animalId) throw new Error('Ce QR code ne contient pas une fiche animal Enclos reconnue.');
+              setScanError('');
+              navigate(`/cheptel/${animalId}`);
+            } catch (err) {
+              setScanError(err.message?.includes('fiche animal') ? err.message : 'Aucun QR lisible trouvé dans cette image. Essayez une image plus nette.');
+            }
+          }} />
         <Link
           to="/cheptel/ajouter"
           className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center gap-2 transition-colors self-start"
@@ -104,7 +182,10 @@ export default function MonCheptel() {
           <Plus className="w-4 h-4 stroke-[1.8]" />
           Ajouter un animal
         </Link>
+        </div>
       </div>
+      {scannerOpen && <div className="mb-5 rounded-2xl border border-[#E5E5E3] bg-white p-4"><video ref={videoRef} className="mx-auto max-h-72 w-full rounded-xl object-cover" playsInline muted />{scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}<p className="mt-2 text-xs text-[#171310]/50">Placez le QR code Enclos dans le cadre ou importez une image du QR code.</p></div>}
+      {!scannerOpen && scanError && <p className="mb-4 text-sm text-red-600">{scanError}</p>}
 
       {error   && <div className="text-red-600 text-[12px] mb-4">{error}</div>}
       {loading && <div className="text-[12px] text-[#171310]/50 mb-4">Chargement du cheptel...</div>}
@@ -179,7 +260,7 @@ export default function MonCheptel() {
                     <td className="px-3 text-[13px] text-[#171310]/70">{a.espece_display || a.espece}</td>
                     <td className="px-3 text-[13px] text-[#171310]/70">{a.sexe_display || a.sexe}</td>
                     <td className="px-3 text-[13px] text-[#171310]/70">{a.date_naissance || '—'}</td>
-                    <td className="px-3 text-[13px] text-[#171310]/70">{a.poids_naissance || '—'}</td>
+                    <td className="px-3 text-[13px] text-[#171310]/70">{a.poids_actuel ?? a.poids_naissance ?? '—'}</td>
                     <td className="px-3">
                       <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-medium
                         ${a.presence === 'vendu' ? 'bg-amber-50 text-amber-700' : a.presence === 'mort' ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, PawPrint, Scale, Calendar, AlertTriangle,
   Pencil, ChevronDown, Check, X, Sparkles, History,
   Bell,
 } from 'lucide-react';
 import api from '../../../API/api';
+import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
 import { clean, validateSelect, validateText } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -57,19 +58,40 @@ function SidePanel({ open, onClose, title, children }) {
 export default function DetailAnimal() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   /* Données principales */
   const [animal,       setAnimal]       = useState(null);
   const [alimentations,setAlimentations]= useState([]);
   const [historique,   setHistorique]   = useState([]);
   const [alertes,      setAlertes]      = useState([]);
+  const [qrImage, setQrImage] = useState('');
+  const [ordonnances, setOrdonnances] = useState([]);
+  const [suivisSante, setSuivisSante] = useState([]);
+  const [showOrdonnanceForm, setShowOrdonnanceForm] = useState(false);
+  const [ordonnanceError, setOrdonnanceError] = useState('');
+  const [diagnosticPhoto, setDiagnosticPhoto] = useState(null);
+  const [diagnosticPhotoUrl, setDiagnosticPhotoUrl] = useState('');
+  const [diagnosticDescription, setDiagnosticDescription] = useState('');
+  const [diagnosticResult, setDiagnosticResult] = useState(null);
+  const [diagnosticError, setDiagnosticError] = useState('');
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const ordonnanceFormRef = useRef(null);
+
+  useEffect(() => () => { if (diagnosticPhotoUrl) URL.revokeObjectURL(diagnosticPhotoUrl); }, [diagnosticPhotoUrl]);
 
   /* UI */
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
-  const [activeTab,setActiveTab]= useState('Général');
+  const [activeTab,setActiveTab]= useState(() => location.hash === '#sante' ? 'Santé' : 'Général');
   const [showHistorique,setShowHistorique]= useState(false);
   const [showAlertes,   setShowAlertes]   = useState(false);
+
+  useEffect(() => {
+    if (location.hash === '#sante') setActiveTab('Santé');
+  }, [location.hash]);
 
   /* Onglet Santé — champs éditables */
   const [presence,   setPresence]   = useState('present');
@@ -81,13 +103,19 @@ export default function DetailAnimal() {
     async function load() {
       try {
         setLoading(true);
-        const [animalData, alimentsData, histData, alertesData] = await Promise.all([
+        const [animalData, alimentsData, histData, alertesData, qrData, ordonnanceData, santeData] = await Promise.all([
           api.getAnimal(id),
           api.getAlimentations().catch(() => []),
           api.getHistorique().catch(() => []),
           api.getAlertes().catch(() => []),
+          api.getAnimalQr(id).catch(() => null),
+          api.getOrdonnances(id).catch(() => []),
+          api.getSuivisSante(id).catch(() => []),
         ]);
         setAnimal(animalData);
+        setQrImage(qrData?.qr_image || '');
+        setOrdonnances(Array.isArray(ordonnanceData) ? ordonnanceData : (ordonnanceData?.results || []));
+        setSuivisSante(Array.isArray(santeData) ? santeData : (santeData?.results || []));
         setPresence(animalData.presence || 'present');
         setEtatSante(animalData.etat_sante || 'sain');
         setNoteSante(animalData.observations || '');
@@ -127,7 +155,7 @@ export default function DetailAnimal() {
   }, [id]);
 
   async function handleSaveSante() {
-    if (!animal) return;
+    if (!animal || animal.presence !== 'present') return;
     const validationError = validateSelect(presence, 'La présence', ['present', 'vendu', 'mort'])
       || validateSelect(etatSante, "L'état de santé", ['sain', 'malade', 'gestation', 'en_traitement'])
       || validateText(noteSante, 'La note de santé', { optional: true, max: 2000 });
@@ -140,7 +168,9 @@ export default function DetailAnimal() {
       const observations = clean(noteSante);
       await api.updateAnimal(id, { presence, etat_sante: etatSante, observations });
       setAnimal(prev => ({ ...prev, presence, etat_sante: etatSante, observations }));
-      if (etatSante === 'gestation') {
+      if (presence !== 'present') {
+        navigate(`/cheptel/${id}`);
+      } else if (etatSante === 'gestation') {
         navigate(`/gestation/ajouter?animal=${id}`);
       } else if (etatSante === 'malade' || etatSante === 'en_traitement') {
         const ouvert = await api.getSuiviSanteOuvert(id);
@@ -153,6 +183,72 @@ export default function DetailAnimal() {
       setError(err.message || 'Erreur lors de la sauvegarde.');
     } finally {
       setSavingSante(false);
+    }
+  }
+
+  function startVoiceDescription() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { setDiagnosticError('La dictée vocale n’est pas prise en charge par ce navigateur. Vous pouvez saisir la description au clavier.'); return; }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.onresult = event => {
+      const phrase = Array.from(event.results).slice(event.resultIndex).filter(result => result.isFinal).map(result => result[0].transcript.trim()).join(' ');
+      if (phrase) setDiagnosticDescription(previous => `${previous}${previous ? ' ' : ''}${phrase}`);
+    };
+    recognition.onerror = () => { setListening(false); setDiagnosticError('La dictée vocale a échoué. Vous pouvez saisir la description au clavier.'); };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    setDiagnosticError('');
+    setListening(true);
+    recognition.start();
+  }
+
+  async function handlePreDiagnostic(event) {
+    event.preventDefault();
+    setDiagnosticError('');
+    setDiagnosticResult(null);
+    if (!diagnosticPhoto) { setDiagnosticError('Prenez ou sélectionnez une photo de la zone concernée.'); return; }
+    if (diagnosticDescription.trim().length < 5) { setDiagnosticError('Décrivez le problème en quelques mots.'); return; }
+    const payload = new FormData();
+    payload.append('animal_id', id);
+    payload.append('photo', diagnosticPhoto);
+    payload.append('description', diagnosticDescription.trim());
+    try {
+      setDiagnosticLoading(true);
+      const result = await api.preDiagnostic(payload);
+      setDiagnosticResult(result);
+      setHistorique(previous => [{ id: `diag-${result.id}`, type: 'Pré-diagnostic IA', date: result.date_creation, title: 'Pré-diagnostic assisté par IA', desc: diagnosticDescription.trim() }, ...previous]);
+    } catch (err) {
+      setDiagnosticError(err.message || 'Le pré-diagnostic est indisponible.');
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }
+
+  function applyOrdonnanceDictation(transcript) {
+    const form = ordonnanceFormRef.current;
+    if (!form) return;
+    const split = transcript.match(/\b(?:instructions?|consignes?|posologie)\b\s*[:,—-]?\s*(.*)$/i);
+    const medicaments = split ? transcript.slice(0, split.index).trim() : transcript;
+    if (medicaments) form.elements.namedItem('medicaments').value = medicaments.replace(/^\s*(?:m[eé]dicaments?)\s*[:,—-]?\s*/i, '');
+    if (split?.[1]) form.elements.namedItem('instructions').value = split[1].trim();
+  }
+
+  async function handleCreateOrdonnance(event) {
+    event.preventDefault();
+    setOrdonnanceError('');
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    data.append('animal', id);
+    try {
+      const created = await api.createOrdonnance(data);
+      setOrdonnances(previous => [created, ...previous]);
+      setShowOrdonnanceForm(false);
+      form.reset();
+    } catch (err) {
+      setOrdonnanceError(err.message || 'Impossible d’enregistrer cette ordonnance.');
     }
   }
 
@@ -267,11 +363,13 @@ export default function DetailAnimal() {
             <p className="mt-1 text-[13px] text-[#171310]/50">Informations complètes de l&apos;animal</p>
           </div>
 
+          {a.photo && <img src={a.photo} alt={`Photo de ${label}`} className="mt-5 h-56 w-full rounded-2xl object-cover sm:w-80" />}
+
           {/* KPI */}
           <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: 'Espèce',       value: fmt(a.espece_display || a.espece), icon: PawPrint,      accent: false },
-              { label: 'Poids (kg)',   value: fmt(a.poids_naissance != null ? `${a.poids_naissance} kg` : null), icon: Scale, accent: false },
+              { label: 'Poids (kg)',   value: fmt((a.poids_actuel ?? a.poids_naissance) != null ? `${a.poids_actuel ?? a.poids_naissance} kg` : null), icon: Scale, accent: false },
               { label: 'Âge',          value: fmt(age), icon: Calendar,      accent: false },
               { label: 'Alertes',      value: String(nonLuesAlertes), icon: AlertTriangle, accent: nonLuesAlertes > 0 },
             ].map(({ label: lbl, value, icon: Icon, accent }) => (
@@ -286,6 +384,40 @@ export default function DetailAnimal() {
               </div>
             ))}
           </div>
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)] gap-4">
+            <section className="rounded-2xl border border-[#E5E5E3] bg-white p-5">
+              <h2 className="font-serif text-[17px] text-[#171310]">QR code de l’animal</h2>
+              <p className="mt-1 text-[12px] text-[#171310]/50">Contient la fiche, les suivis, ordonnances et l’historique.</p>
+              {qrImage ? <a href={qrImage} download={`animal-${a.numero_identification}.png`} aria-label="Télécharger le QR code"><img src={qrImage} alt={`QR code de ${label}`} className="mx-auto mt-3 h-44 w-44" /></a> : <p className="mt-4 text-xs text-red-600">QR code indisponible.</p>}
+              <p className="text-center text-xs text-[#171310]/50">{a.numero_identification}</p>
+            </section>
+            <section id="animal-ordonnances" className="rounded-2xl border border-[#E5E5E3] bg-white p-5">
+              <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-[17px] text-[#171310]">Ordonnances</h2>{animal.presence === 'present' && <button type="button" onClick={() => setShowOrdonnanceForm(value => !value)} className="rounded-lg bg-[#5C3A21] px-3 py-2 text-xs font-medium text-white">{showOrdonnanceForm ? 'Fermer' : 'Ajouter'}</button>}</div>
+              {showOrdonnanceForm && <form ref={ordonnanceFormRef} onSubmit={handleCreateOrdonnance} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <input name="titre" required maxLength="150" placeholder="Titre de l’ordonnance" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+                <input name="veterinaire" maxLength="150" placeholder="Vétérinaire" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+                <input name="date_prescription" type="date" required defaultValue={new Date().toISOString().slice(0,10)} className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
+                <select name="suivi_sante" defaultValue="" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm"><option value="">Lier à un suivi santé (facultatif)</option>{suivisSante.map(suivi => <option key={suivi.id} value={suivi.id}>{suivi.statut} — {suivi.date_debut || `Suivi #${suivi.id}`}</option>)}</select>
+                <input name="document" type="file" accept="application/pdf,image/*" className="text-xs" />
+                <textarea name="medicaments" required maxLength="5000" placeholder="Médicaments prescrits" className="min-h-20 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
+                <VoiceDictationButton onTranscript={applyOrdonnanceDictation} />
+                <textarea name="instructions" maxLength="5000" placeholder="Instructions du vétérinaire" className="min-h-16 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
+                {ordonnanceError && <p className="text-xs text-red-600 sm:col-span-2">{ordonnanceError}</p>}
+                <button type="submit" className="h-10 rounded-lg bg-[#5C3A21] px-4 text-sm text-white sm:col-span-2">Enregistrer l’ordonnance</button>
+              </form>}
+              {ordonnances.length ? <ul className="mt-4 divide-y divide-[#E5E5E3]">{ordonnances.map(ord => <li key={ord.id} className="py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{ord.titre}</p><p className="mt-1 text-xs text-[#171310]/60">{ord.date_prescription} · {ord.veterinaire || 'Vétérinaire non précisé'}</p><p className="mt-1 whitespace-pre-wrap text-xs">{ord.medicaments}</p></div>{ord.document && <a className="text-xs text-[#5C3A21] underline" href={ord.document} target="_blank" rel="noreferrer">Document</a>}</div></li>)}</ul> : <p className="mt-4 text-sm text-[#171310]/50">Aucune ordonnance enregistrée.</p>}
+            </section>
+          </div>
+
+          <section className="mt-4 rounded-2xl border border-[#E5E5E3] bg-white p-5">
+            <div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-[#5C3A21]" /><div><h2 className="font-serif text-[18px] text-[#171310]">Pré-diagnostic avec IA</h2><p className="mt-1 text-[12px] text-[#171310]/55">Une photo, votre description (à l’oral ou au clavier), puis des pistes expliquées et des premières recommandations.</p></div></div>
+            {animal.presence === 'present' ? <form onSubmit={handlePreDiagnostic} className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+              <div><label htmlFor="diagnostic-photo" className="mb-2 block text-xs font-semibold">Photo du problème</label><input id="diagnostic-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required onChange={event => { const file = event.target.files?.[0] || null; setDiagnosticPhoto(file); setDiagnosticPhotoUrl(file ? URL.createObjectURL(file) : ''); }} className="w-full text-xs" />{diagnosticPhotoUrl && <img src={diagnosticPhotoUrl} alt="Photo pour le pré-diagnostic" className="mt-3 h-36 w-full rounded-lg object-cover" />}</div>
+              <div><label htmlFor="diagnostic-description" className="mb-2 block text-xs font-semibold">Que se passe-t-il ?</label><textarea id="diagnostic-description" value={diagnosticDescription} onChange={event => setDiagnosticDescription(event.target.value)} rows={4} maxLength={3000} required placeholder="Décrivez les signes observés…" className="w-full resize-y rounded-lg border border-[#E5E5E3] p-3 text-sm outline-none focus:border-[#5C3A21]" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => listening ? recognitionRef.current?.stop() : startVoiceDescription()} className="rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#5C3A21]">{listening ? 'Arrêter la dictée' : 'Décrire à l’oral'}</button><button type="submit" disabled={diagnosticLoading} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white disabled:opacity-60">{diagnosticLoading ? 'Analyse de la photo…' : 'Obtenir des pistes'}</button><span className="text-[11px] text-[#171310]/45">La photo et la description sont envoyées à l’IA pour analyse.</span></div>{diagnosticError && <p className="mt-2 text-xs text-red-600">{diagnosticError}</p>}</div>
+            </form> : <p className="mt-4 text-sm text-[#171310]/60">Un pré-diagnostic ne peut pas être demandé pour un animal vendu ou mort.</p>}
+            {diagnosticResult && <div className="mt-5 rounded-xl border border-[#E5E5E3] bg-[#F8F7F5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Pistes à vérifier</h3><span className={`rounded-full px-3 py-1 text-xs font-semibold ${diagnosticResult.urgence === 'élevée' ? 'bg-red-100 text-red-700' : diagnosticResult.urgence === 'faible' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>Urgence {diagnosticResult.urgence}</span></div><div className="mt-3 grid gap-3 sm:grid-cols-2">{diagnosticResult.suggestions?.map((suggestion, index) => <article key={`${suggestion.nom}-${index}`} className="rounded-lg bg-white p-3"><h4 className="text-sm font-semibold">{suggestion.nom}</h4><p className="mt-1 text-xs leading-relaxed text-[#171310]/70">{suggestion.justification}</p>{suggestion.niveau && <p className="mt-1 text-[11px] text-[#171310]/50">Niveau : {suggestion.niveau}</p>}</article>)}</div><h4 className="mt-4 text-xs font-semibold">Premières recommandations</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#171310]/75">{diagnosticResult.recommandations?.map((recommendation, index) => <li key={index}>{recommendation}</li>)}</ul><p className="mt-3 border-t border-[#E5E5E3] pt-3 text-[11px] text-[#171310]/55">{diagnosticResult.limites} Cette aide ne remplace pas l’avis d’un vétérinaire.</p></div>}
+          </section>
 
           {/* Corps */}
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6">
@@ -334,7 +466,9 @@ export default function DetailAnimal() {
 
               {/* ── ONGLET SANTÉ ── */}
               {activeTab === 'Santé' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5 px-6 pt-6 pb-6">
+                <div className="px-6 py-6">
+                  {animal.presence !== 'present' && <p className="mb-5 rounded-lg bg-amber-50 p-3 text-[13px] text-amber-900">Animal {animal.presence === 'mort' ? 'mort' : 'vendu'} : les suivis et rendez-vous ne peuvent plus être modifiés. Le carnet reste consultable.</p>}
+                  {animal.presence === 'present' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5 pb-6">
 
                   {/* Présence */}
                   <div>
@@ -379,6 +513,16 @@ export default function DetailAnimal() {
                       {savingSante ? 'Enregistrement…' : 'Enregistrer'}
                     </button>
                   </div>
+                  </div>}
+                  <section className="border-t border-[#E5E5E3] pt-5">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div><h3 className="font-serif text-[17px] text-[#171310]">Carnet de santé</h3><p className="mt-1 text-xs text-[#171310]/50">Consultations, mesures, notes et prochains rendez-vous.</p></div>
+                      {animal.presence === 'present' && <Link to={`/sante/ajouter?animal=${id}`} className="rounded-lg bg-[#5C3A21] px-3 py-2 text-xs font-medium text-white">Nouveau suivi</Link>}
+                    </div>
+                    {suivisSante.length === 0 ? <p className="rounded-lg bg-[#F5F4F2] p-4 text-sm text-[#171310]/55">Aucun suivi enregistré pour cet animal.</p> : <div className="space-y-3">{suivisSante.map(suivi => <Link key={suivi.id} to={`/sante/${suivi.id}`} className="block rounded-xl border border-[#E5E5E3] p-4 transition-colors hover:bg-[#FAF9F7]"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold text-[#171310]">{suivi.statut}</span><span className="text-xs text-[#171310]/50">{suivi.date_debut || 'Date non précisée'}{suivi.date_prochaine_consultation ? ` · Prochaine consultation : ${suivi.date_prochaine_consultation}` : ''}</span></div><p className="mt-2 text-xs text-[#171310]/60">{[suivi.poids_kg != null && `Poids : ${suivi.poids_kg} kg`, suivi.temperature_celsius != null && `Température : ${suivi.temperature_celsius} °C`, suivi.frequence_cardiaque != null && `Fréquence : ${suivi.frequence_cardiaque} bpm`].filter(Boolean).join(' · ') || 'Aucune mesure'}{suivi.note ? ` — ${suivi.note}` : ''}</p></Link>)}</div>}
+                    <div className="mt-5 flex items-center justify-between gap-3"><h3 className="font-serif text-[17px] text-[#171310]">Ordonnances</h3>{animal.presence === 'present' && <button type="button" onClick={() => { setActiveTab('Général'); document.getElementById('animal-ordonnances')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} className="text-xs font-medium text-[#5C3A21] underline">Consulter et enregistrer</button>}</div>
+                    {ordonnances.length === 0 && <p className="mt-3 text-sm text-[#171310]/55">Aucune ordonnance enregistrée.</p>}
+                  </section>
                 </div>
               )}
 
@@ -482,11 +626,11 @@ export default function DetailAnimal() {
               </div>
 
               {/* Bouton modifier */}
-              <Link to={`/cheptel/${id}/modifier`}
+              {animal.presence === 'present' && <Link to={`/cheptel/${id}/modifier`}
                 className="h-9 rounded-lg bg-[#5C3A21] hover:bg-[#3B2313] text-white px-4 text-[13px] font-medium inline-flex items-center justify-center gap-2 transition-colors">
                 <Pencil className="w-4 h-4 stroke-[1.8]" />
                 Modifier cet animal
-              </Link>
+              </Link>}
             </div>
           </div>
         </>
