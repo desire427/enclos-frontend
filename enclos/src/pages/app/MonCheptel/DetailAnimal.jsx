@@ -435,8 +435,8 @@ export default function DetailAnimal() {
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)] gap-4">
             <section className="rounded-2xl border border-[#E5E5E3] bg-white p-5">
               <h2 className="font-serif text-[17px] text-[#171310]">QR code de l’animal</h2>
-              <p className="mt-1 text-[12px] text-[#171310]/50">Contient la fiche, les suivis, ordonnances et l’historique.</p>
-              {qrImage ? <a href={qrImage} download={`animal-${a.numero_identification}.png`} aria-label="Télécharger le QR code"><img src={qrImage} alt={`QR code de ${label}`} className="mx-auto mt-3 h-44 w-44" /></a> : <p className="mt-4 text-xs text-red-600">QR code indisponible.</p>}
+              <p className="mt-1 text-[12px] text-[#171310]/50">Scannez-le dans Enclos pour ouvrir directement cette fiche.</p>
+              {qrImage ? <a href={qrImage} download={`animal-${a.numero_identification}.png`} aria-label="Télécharger le QR code"><img src={qrImage} alt={`QR code de ${label}`} className="mx-auto mt-3 block aspect-square w-full max-w-[208px]" /></a> : <p className="mt-4 text-xs text-red-600">QR code indisponible.</p>}
               <p className="text-center text-xs text-[#171310]/50">{a.numero_identification}</p>
             </section>
             <section id="animal-ordonnances" className="rounded-2xl border border-[#E5E5E3] bg-white p-5">

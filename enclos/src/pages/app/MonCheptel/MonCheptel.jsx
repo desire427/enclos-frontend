@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QrScanner from 'qr-scanner';
-import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight, Sparkles, ScanLine, X } from 'lucide-react';
 import api from '../../../API/api';
 import FilterDropdown from '../../../components/common/FilterDropdown';
 
@@ -35,20 +35,28 @@ function animalLabel(a) {
 }
 
 async function getAnimalIdFromQr(value) {
-  if (value.startsWith('ENCLOS1:')) {
-    const b64 = value.slice('ENCLOS1:'.length).replace(/-/g, '+').replace(/_/g, '/');
+  if (typeof value !== 'string') return null;
+  const qrValue = value.trim();
+  if (qrValue.startsWith('ENCLOS1:')) {
+    const payload = qrValue.slice('ENCLOS1:'.length);
+    if (/^\d+$/.test(payload)) return Number(payload);
+    if (!('DecompressionStream' in window)) throw new Error('Ce navigateur ne peut pas décoder ce QR. Importez une image du code ou utilisez un navigateur récent.');
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const bytes = Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), char => char.charCodeAt(0));
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
     const decoded = JSON.parse(await new Response(stream).text());
-    return decoded.animal?.id || null;
+    const id = Number(decoded.animal?.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
   }
   try {
-    const url = new URL(value);
+    const url = new URL(qrValue, window.location.origin);
     const match = url.pathname.match(/\/cheptel\/(\d+)\/?$/);
-    return match ? Number(match[1]) : null;
+    if (match) return Number(match[1]);
   } catch {
-    return null;
+    // Try a plain numeric animal ID below.
   }
+  const numericId = qrValue.match(/^\d+$/);
+  return numericId ? Number(numericId[0]) : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -60,8 +68,10 @@ export default function MonCheptel() {
   const [error, setError]             = useState('');
   const [page, setPage]               = useState(1);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerReady, setScannerReady] = useState(false);
   const [scanError, setScanError] = useState('');
   const videoRef = useRef(null);
+  const scannerOverlayRef = useRef(null);
   const qrFileRef = useRef(null);
   const navigate = useNavigate();
 
@@ -90,30 +100,55 @@ export default function MonCheptel() {
     if (!scannerOpen) return undefined;
     let scanner;
     let stopped = false;
+    let resultHandled = false;
     async function startScanner() {
       try {
         if (!videoRef.current) throw new Error('La caméra ne peut pas être affichée. Fermez le scanner et réessayez.');
         const activeScanner = new QrScanner(videoRef.current, async result => {
-          if (!result || stopped) return;
+          if (!result || stopped || resultHandled) return;
+          resultHandled = true;
           try {
             const animalId = await getAnimalIdFromQr(result.data);
             if (!animalId) {
               setScanError('Ce QR code ne contient pas une fiche animal Enclos reconnue.');
+              setScannerReady(false);
+              setScannerOpen(false);
               return;
             }
             stopped = true;
             activeScanner.stop();
             setScannerOpen(false);
             navigate(`/cheptel/${animalId}`);
-          } catch {
-            setScanError('Impossible de lire ce QR code. Essayez une image plus nette ou rapprochez le code de la caméra.');
+          } catch (err) {
+            setScanError(err.message || 'Impossible de décoder ce QR code. Essayez une image plus nette ou rapprochez le code de la caméra.');
+            setScannerReady(false);
+            setScannerOpen(false);
           }
-        }, { preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: true, highlightCodeOutline: true });
+        }, {
+          preferredCamera: 'environment',
+          maxScansPerSecond: 12,
+          calculateScanRegion: video => {
+            const size = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.75);
+            return {
+              x: Math.floor((video.videoWidth - size) / 2),
+              y: Math.floor((video.videoHeight - size) / 2),
+              width: size,
+              height: size,
+              downScaledWidth: 640,
+              downScaledHeight: 640,
+            };
+          },
+          highlightScanRegion: true,
+          highlightCodeOutline: false,
+          overlay: scannerOverlayRef.current,
+        });
         scanner = activeScanner;
         await activeScanner.start();
+        if (!stopped) setScannerReady(true);
         if (stopped) activeScanner.destroy();
       } catch (err) {
         if (!stopped) {
+          setScannerReady(false);
           setScanError(err.name === 'NotAllowedError'
             ? 'Autorisez l’accès à la caméra dans votre navigateur pour scanner un QR code.'
             : err.message || 'Impossible d’ouvrir la caméra.');
@@ -160,7 +195,7 @@ export default function MonCheptel() {
         </div>
         <div className="flex flex-wrap gap-2 self-start">
           <Link to="/cheptel/diagnostic-ia" className="h-9 rounded-lg bg-[#5C3A21] px-3 text-[13px] font-medium text-white inline-flex items-center gap-2"><Sparkles className="h-4 w-4" />Diagnostic IA</Link>
-          <button type="button" onClick={() => { setScanError(''); setScannerOpen(value => !value); }} className="h-9 rounded-lg border border-[#5C3A21] px-3 text-[13px] font-medium text-[#5C3A21]">{scannerOpen ? 'Fermer le scanner' : 'Scanner un QR'}</button>
+          <button type="button" onClick={() => { setScanError(''); setScannerReady(false); setScannerOpen(value => !value); }} className="h-9 rounded-lg border border-[#5C3A21] px-3 text-[13px] font-medium text-[#5C3A21]">{scannerOpen ? 'Fermer le scanner' : 'Scanner un QR'}</button>
           <button type="button" onClick={() => { setScanError(''); qrFileRef.current?.click(); }} className="h-9 rounded-lg border border-[#E5E5E3] px-3 text-[13px] font-medium text-[#171310]">Importer un QR</button>
           <input ref={qrFileRef} type="file" accept="image/*" className="hidden" onChange={async event => {
             const file = event.target.files?.[0];
@@ -185,7 +220,20 @@ export default function MonCheptel() {
         </Link>
         </div>
       </div>
-      {scannerOpen && <div className="mb-5 rounded-2xl border border-[#E5E5E3] bg-white p-4"><video ref={videoRef} className="mx-auto max-h-72 w-full rounded-xl object-cover" playsInline muted />{scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}<p className="mt-2 text-xs text-[#171310]/50">Placez le QR code Enclos dans le cadre ou importez une image du QR code.</p></div>}
+      {scannerOpen && <section className="mb-5 max-w-2xl overflow-hidden rounded-xl border border-[#2B2926] bg-[#171614] text-white">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2"><ScanLine className="h-4 w-4 text-[#E9B213]" /><h2 className="text-sm font-semibold">Scanner une fiche animal</h2></div>
+          <button type="button" onClick={() => { setScannerReady(false); setScannerOpen(false); }} className="rounded p-1 text-white/70 hover:bg-white/10 hover:text-white" aria-label="Fermer le scanner"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="relative mx-auto aspect-[4/3] w-full max-h-[min(70vh,28rem)] overflow-hidden bg-black sm:aspect-video">
+          <video ref={videoRef} className="absolute inset-0 h-full w-full object-contain" playsInline muted />
+          <div ref={scannerOverlayRef} className="pointer-events-none absolute z-10 rounded-xl border-2 border-[#E9B213] shadow-[0_0_0_999px_rgba(0,0,0,0.38)]" />
+          <div className="absolute inset-x-0 bottom-3 z-20 flex justify-center">
+            <span className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium">{scannerReady ? 'Caméra prête · centrez le QR dans le cadre' : 'Activation de la caméra…'}</span>
+          </div>
+        </div>
+        <p className="px-4 py-3 text-xs leading-relaxed text-white/65">Tenez le code à plat, bien éclairé et centré dans le cadre jaune. Vous pouvez aussi importer une photo du QR.</p>
+      </section>}
       {!scannerOpen && scanError && <p className="mb-4 text-sm text-red-600">{scanError}</p>}
 
       {error   && <div className="text-red-600 text-[12px] mb-4">{error}</div>}

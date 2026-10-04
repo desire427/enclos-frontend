@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, Check, Plus, X, Wheat } from 'lucide-react';
 import api from '../../../API/api';
 import useAlimRefs from '../../../hooks/useAlimRefs';
 import CreateSimpleModal from '../../../components/common/CreateSimpleModal';
+import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
 import { clean, validateAnimal, validateDate, validateNumber, validateSimpleRecord } from '../../../utils/validation';
 
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -61,6 +62,47 @@ const ESPECE_CHOICES = [
   { value: 'porcin', label: 'Porcin' },
 ];
 
+const SPOKEN_FIELD_LABELS = 'nom(?: de l.animal)?|s.appelle|esp[eè]ce|race|sexe|date de naissance|n[eé](?:e)?(?: le)?|poids(?: actuel)?|couleur|pr[eé]sence|statut|[eé]tat(?: de sant[eé])?|observations?|notes?';
+
+function normalizeSpokenText(value = '') {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function spokenField(transcript, labelPattern) {
+  const nextLabel = `(?:${SPOKEN_FIELD_LABELS})`;
+  const expression = new RegExp(`(?:^|[,;.!?]\\s*|\\b)(?:${labelPattern})\\s*(?::|\\b(?:est|c'est)\\b)?\\s*(.+?)(?=\\s*(?:[,;.!?]|\\b${nextLabel}\\b)|$)`, 'i');
+  return transcript.match(expression)?.[1]?.trim().replace(/^[:\s]+|\s+$/g, '') || '';
+}
+
+function parseSpokenSpecies(value) {
+  const normalized = normalizeSpokenText(value);
+  if (/\b(bovin|bovine|vache|taureau|veau)\b/.test(normalized)) return 'bovin';
+  if (/\b(ovin|ovine|brebis|mouton|agneau)\b/.test(normalized)) return 'ovin';
+  if (/\b(caprin|caprine|chevre|bouc|chevreau)\b/.test(normalized)) return 'caprin';
+  if (/\b(porcin|porcine|cochon|truie|porcelet)\b/.test(normalized)) return 'porcin';
+  return '';
+}
+
+function parseSpokenNumber(value) {
+  const normalized = normalizeSpokenText(value).replace(/(\d+)\s+virgule\s+(\d+)/, '$1.$2');
+  const match = normalized.match(/\d+(?:[,.]\d+)?/);
+  return match ? match[0].replace(',', '.') : '';
+}
+
+function parseSpokenDate(value) {
+  const normalized = normalizeSpokenText(value);
+  const numericDate = normalized.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/);
+  if (numericDate) {
+    const [, day, month, rawYear] = numericDate;
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const spokenDate = normalized.match(/\b(\d{1,2})\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})\b/);
+  if (!spokenDate) return '';
+  const months = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  return `${spokenDate[3]}-${String(months.indexOf(spokenDate[2]) + 1).padStart(2, '0')}-${spokenDate[1].padStart(2, '0')}`;
+}
+
 export default function AjoutAnimal() {
   const navigate = useNavigate();
   const { typeAliments, frequences, loading: refsLoading, reload } = useAlimRefs();
@@ -83,6 +125,7 @@ export default function AjoutAnimal() {
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef(null);
   const cameraStream = useRef(null);
+  const pendingRaceNameRef = useRef('');
 
   useEffect(() => {
     if (!photo) { setPhotoPreview(''); return undefined; }
@@ -156,6 +199,7 @@ export default function AjoutAnimal() {
   /* ── Races dynamiques ── */
   const [races,        setRaces]        = useState([]);
   const [racesLoading, setRacesLoading] = useState(false);
+  const [racesSpecies, setRacesSpecies] = useState('');
 
   /* ── Modals ── */
   const [showRaceModal,  setShowRaceModal]  = useState(false);
@@ -177,16 +221,81 @@ export default function AjoutAnimal() {
       try {
         setRacesLoading(true);
         const data = await api.getRaces(espece);
-        setRaces(Array.isArray(data) ? data : []);
-        setRace('');
+        const nextRaces = Array.isArray(data) ? data : [];
+        setRaces(nextRaces);
+        setRacesSpecies(espece);
+        const spokenRace = pendingRaceNameRef.current;
+        const matchingRace = spokenRace && nextRaces.find(item => normalizeSpokenText(item.nom) === normalizeSpokenText(spokenRace));
+        setRace(matchingRace ? String(matchingRace.id) : '');
+        pendingRaceNameRef.current = '';
       } catch {
         setRaces([]);
+        setRacesSpecies(espece);
+        pendingRaceNameRef.current = '';
       } finally {
         setRacesLoading(false);
       }
     }
     loadRaces();
   }, [espece]);
+
+  function applyAnimalDictation(transcript) {
+    let filledFields = 0;
+    const valueFor = label => spokenField(transcript, label);
+    const spokenName = valueFor('nom(?: de l.animal)?|s.appelle');
+    const spokenSpecies = parseSpokenSpecies(valueFor('esp[eè]ce')) || parseSpokenSpecies(transcript);
+    const spokenRace = valueFor('race');
+    const spokenSex = normalizeSpokenText(valueFor('sexe') || transcript);
+    const spokenDate = parseSpokenDate(valueFor('date de naissance|n[eé](?:e)?(?: le)?'));
+    const spokenWeight = parseSpokenNumber(valueFor('poids(?: actuel)?'));
+    const spokenColor = valueFor('couleur');
+    const spokenPresence = normalizeSpokenText(valueFor('pr[eé]sence|statut'));
+    const spokenHealth = normalizeSpokenText(valueFor('[eé]tat(?: de sant[eé])?'));
+    const spokenObservations = valueFor('observations?|notes?');
+
+    if (spokenName) { setNom(spokenName); filledFields += 1; }
+    if (spokenSpecies) { setEspece(spokenSpecies); filledFields += 1; }
+    if (spokenRace) {
+      const targetSpecies = spokenSpecies || espece;
+      if (targetSpecies === espece && racesSpecies === targetSpecies && !racesLoading) {
+        const matchingRace = races.find(item => normalizeSpokenText(item.nom) === normalizeSpokenText(spokenRace));
+        if (matchingRace) setRace(String(matchingRace.id));
+      } else {
+        pendingRaceNameRef.current = spokenRace;
+      }
+      filledFields += 1;
+    }
+    if (/\b(femelle|vache|brebis|truie)\b/.test(spokenSex)) { setSexe('femelle'); filledFields += 1; }
+    else if (/\b(male|taureau|bouc)\b/.test(spokenSex)) { setSexe('male'); filledFields += 1; }
+    if (spokenDate) { setDateNaissance(spokenDate); filledFields += 1; }
+    if (spokenWeight) { setPoids(spokenWeight); filledFields += 1; }
+    if (spokenColor) { setCouleur(spokenColor); filledFields += 1; }
+    if (/\b(vendu|vendue)\b/.test(spokenPresence)) { setPresence('vendu'); filledFields += 1; }
+    else if (/\b(mort|morte|decede|decedee)\b/.test(spokenPresence)) { setPresence('mort'); filledFields += 1; }
+    else if (/\b(present|presente)\b/.test(spokenPresence)) { setPresence('present'); filledFields += 1; }
+    if (/\b(malade|malade)\b/.test(spokenHealth)) { setEtatSante('malade'); filledFields += 1; }
+    else if (/\b(gestation|gestante|enceinte)\b/.test(spokenHealth)) { setEtatSante('gestation'); filledFields += 1; }
+    else if (/\b(traitement|en traitement)\b/.test(spokenHealth)) { setEtatSante('en_traitement'); filledFields += 1; }
+    else if (/\b(sain|saine)\b/.test(spokenHealth)) { setEtatSante('sain'); filledFields += 1; }
+    if (spokenObservations) { setObservations(spokenObservations); filledFields += 1; }
+
+    const spokenFeedType = valueFor('type d.aliment|aliment');
+    const spokenFeedFrequency = valueFor('fr[eé]quence');
+    const spokenFeedQuantity = parseSpokenNumber(valueFor('quantit[eé]'));
+    const spokenFeedDate = parseSpokenDate(valueFor('date d.alimentation'));
+    if (spokenFeedType || spokenFeedFrequency || spokenFeedQuantity || spokenFeedDate) {
+      setWithAlim(true);
+      const feedType = typeAliments.find(item => normalizeSpokenText(item.nom) === normalizeSpokenText(spokenFeedType));
+      const feedFrequency = frequences.find(item => normalizeSpokenText(item.nom) === normalizeSpokenText(spokenFeedFrequency));
+      if (feedType) { setAlimType(String(feedType.id)); filledFields += 1; }
+      if (feedFrequency) { setAlimFreq(String(feedFrequency.id)); filledFields += 1; }
+      if (spokenFeedQuantity) { setAlimQte(spokenFeedQuantity); filledFields += 1; }
+      if (spokenFeedDate) { setAlimDate(spokenFeedDate); filledFields += 1; }
+    }
+
+    setError('');
+    return filledFields;
+  }
 
   /* Créer une nouvelle race */
   async function handleCreateRace(e) {
@@ -315,6 +424,14 @@ export default function AjoutAnimal() {
         <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">
           Informations générales
         </p>
+        <div className="mb-5 rounded-lg border border-[#E5E5E3] bg-[#FAF9F7] p-3">
+          <VoiceDictationButton
+            onTranscript={applyAnimalDictation}
+            buttonLabel="Dicter les informations"
+            helperText="Nommez les champs à remplir : nom, espèce, race, sexe, date de naissance, poids, couleur, statut, état de santé et observations. Vérifiez les champs avant l’enregistrement."
+            containerClassName=""
+          />
+        </div>
 
         {/* Nom */}
         <div className="mb-4">

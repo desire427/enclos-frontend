@@ -26,8 +26,12 @@ export default function VoiceDictationButton({
     recognition.onresult = event => {
       const transcript = Array.from(event.results).map(result => result[0].transcript).join(' ').trim();
       if (!transcript) return;
-      onTranscript(transcript);
-      setMessage(`Transcription ajoutée : « ${transcript} » — relisez les champs avant d’enregistrer.`);
+      const updatedFields = onTranscript(transcript);
+      setMessage(Number.isInteger(updatedFields)
+        ? updatedFields > 0
+          ? `${updatedFields} champ${updatedFields > 1 ? 's' : ''} rempli${updatedFields > 1 ? 's' : ''}. Vérifiez-les avant d’enregistrer.`
+          : 'Transcription reçue, mais aucun champ reconnu. Dites les libellés des champs avant leur valeur.'
+        : `Transcription ajoutée : « ${transcript} » — relisez les champs avant d’enregistrer.`);
     };
     recognition.onerror = event => {
       setListening(false);
