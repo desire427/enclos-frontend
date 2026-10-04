@@ -8,6 +8,10 @@ export function clean(value = '') {
   return String(value).replace(/\s+/g, ' ').trim();
 }
 
+export function countWords(value = '') {
+  return (clean(value).match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
+}
+
 export function required(value, label) {
   return clean(value) ? '' : `${label} est obligatoire.`;
 }

@@ -17,6 +17,7 @@ import MonCheptel     from './pages/app/MonCheptel/MonCheptel';
 import AjoutAnimal    from './pages/app/MonCheptel/AjoutAnimal';
 import DetailAnimal   from './pages/app/MonCheptel/DetailAnimal';
 import ModifierAnimal from './pages/app/MonCheptel/ModifierAnimal';
+import DiagnosticIA   from './pages/app/MonCheptel/DiagnosticIA';
 
 // Alimentation
 import Alimentation        from './pages/app/Alimentation/Alimentation';
@@ -64,6 +65,7 @@ export default function App() {
           {/* Mon Cheptel */}
           <Route path="/cheptel"              element={<MonCheptel />} />
           <Route path="/cheptel/ajouter"      element={<AjoutAnimal />} />
+          <Route path="/cheptel/diagnostic-ia" element={<DiagnosticIA />} />
           <Route path="/cheptel/:id"          element={<DetailAnimal />} />
           <Route path="/cheptel/:id/modifier" element={<ModifierAnimal />} />
 

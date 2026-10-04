@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import QrScanner from 'qr-scanner';
-import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, PawPrint, Activity, Plus, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import api from '../../../API/api';
 import FilterDropdown from '../../../components/common/FilterDropdown';
 
@@ -158,7 +158,8 @@ export default function MonCheptel() {
           <h1 className="font-serif text-[28px] leading-tight text-[#171310]">Mon Cheptel</h1>
           <p className="mt-1 text-[13px] text-[#171310]/50">Gérez la liste de vos animaux</p>
         </div>
-        <div className="flex gap-2 self-start">
+        <div className="flex flex-wrap gap-2 self-start">
+          <Link to="/cheptel/diagnostic-ia" className="h-9 rounded-lg bg-[#5C3A21] px-3 text-[13px] font-medium text-white inline-flex items-center gap-2"><Sparkles className="h-4 w-4" />Diagnostic IA</Link>
           <button type="button" onClick={() => { setScanError(''); setScannerOpen(value => !value); }} className="h-9 rounded-lg border border-[#5C3A21] px-3 text-[13px] font-medium text-[#5C3A21]">{scannerOpen ? 'Fermer le scanner' : 'Scanner un QR'}</button>
           <button type="button" onClick={() => { setScanError(''); qrFileRef.current?.click(); }} className="h-9 rounded-lg border border-[#E5E5E3] px-3 text-[13px] font-medium text-[#171310]">Importer un QR</button>
           <input ref={qrFileRef} type="file" accept="image/*" className="hidden" onChange={async event => {

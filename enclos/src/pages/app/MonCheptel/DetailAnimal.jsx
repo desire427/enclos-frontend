@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import api from '../../../API/api';
 import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
-import { clean, validateSelect, validateText } from '../../../utils/validation';
+import PreDiagnosticHistory from '../../../components/common/PreDiagnosticHistory';
+import { formatHistoryDate, isPreDiagnosticEvent } from '../../../utils/history';
+import { clean, countWords, validateSelect, validateText } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 const TABS = ['Général', 'Santé', 'Alimentation'];
@@ -30,11 +32,14 @@ function calcAge(dateNaissance) {
 
 /* Normalise un événement d'historique */
 function normalizeEvent(h) {
+  const type = h.type_evenement || h.type || 'normal';
+  const title = h.titre || h.title || h.type_evenement || 'Événement';
   return {
     id:    h.id,
-    type:  h.type_evenement || h.type || 'normal',
+    type,
+    isIA:  h.source_ia === true || isPreDiagnosticEvent(title, type),
     date:  h.date_evenement || h.date || h.created_at || '',
-    title: h.titre || h.title || h.type_evenement || 'Événement',
+    title,
     desc:  h.description || h.details || h.note || '',
   };
 }
@@ -70,8 +75,6 @@ export default function DetailAnimal() {
   const [suivisSante, setSuivisSante] = useState([]);
   const [showOrdonnanceForm, setShowOrdonnanceForm] = useState(false);
   const [ordonnanceError, setOrdonnanceError] = useState('');
-  const [diagnosticPhoto, setDiagnosticPhoto] = useState(null);
-  const [diagnosticPhotoUrl, setDiagnosticPhotoUrl] = useState('');
   const [diagnosticDescription, setDiagnosticDescription] = useState('');
   const [diagnosticResult, setDiagnosticResult] = useState(null);
   const [diagnosticError, setDiagnosticError] = useState('');
@@ -79,8 +82,6 @@ export default function DetailAnimal() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
   const ordonnanceFormRef = useRef(null);
-
-  useEffect(() => () => { if (diagnosticPhotoUrl) URL.revokeObjectURL(diagnosticPhotoUrl); }, [diagnosticPhotoUrl]);
 
   /* UI */
   const [loading,  setLoading]  = useState(false);
@@ -186,40 +187,83 @@ export default function DetailAnimal() {
     }
   }
 
-  function startVoiceDescription() {
+  async function startVoiceDescription() {
+    setDiagnosticError('');
+    if (!window.isSecureContext) {
+      setDiagnosticError('La dictée nécessite une connexion sécurisée (HTTPS) ou localhost.');
+      return;
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) { setDiagnosticError('La dictée vocale n’est pas prise en charge par ce navigateur. Vous pouvez saisir la description au clavier.'); return; }
+
+    let microphoneStream;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setDiagnosticError('Ce navigateur ne donne pas accès au microphone pour la dictée.');
+        return;
+      }
+      microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphoneStream.getTracks().forEach(track => track.stop());
+      microphoneStream = null;
+    } catch (error) {
+      const messages = {
+        NotAllowedError: 'L’accès au microphone est refusé pour ce site. Vérifiez les permissions du navigateur.',
+        NotFoundError: 'Aucun microphone n’a été détecté sur cet appareil.',
+        NotReadableError: 'Le microphone est utilisé par une autre application ou ne peut pas être ouvert.',
+        SecurityError: 'Le navigateur bloque le microphone pour cette adresse. Utilisez localhost ou HTTPS.',
+      };
+      setDiagnosticError(messages[error.name] || `Impossible d’ouvrir le microphone (${error.name || 'erreur inconnue'}).`);
+      microphoneStream?.getTracks().forEach(track => track.stop());
+      return;
+    }
+
     const recognition = new SpeechRecognition();
     recognition.lang = 'fr-FR';
     recognition.interimResults = false;
-    recognition.continuous = true;
+    recognition.continuous = false;
+    recognition.onstart = () => setListening(true);
     recognition.onresult = event => {
       const phrase = Array.from(event.results).slice(event.resultIndex).filter(result => result.isFinal).map(result => result[0].transcript.trim()).join(' ');
       if (phrase) setDiagnosticDescription(previous => `${previous}${previous ? ' ' : ''}${phrase}`);
     };
-    recognition.onerror = () => { setListening(false); setDiagnosticError('La dictée vocale a échoué. Vous pouvez saisir la description au clavier.'); };
+    recognition.onerror = event => {
+      setListening(false);
+      const messages = {
+        'not-allowed': 'Le microphone est accessible, mais le moteur vocal du navigateur refuse la dictée. Vérifiez les permissions de reconnaissance vocale.',
+        'service-not-allowed': 'Le service de reconnaissance vocale du navigateur est indisponible ou bloqué.',
+        network: 'Le service de reconnaissance vocale est inaccessible. Vérifiez la connexion Internet.',
+        'audio-capture': 'Le navigateur ne parvient pas à capter le son du microphone.',
+        'no-speech': 'Aucune parole n’a été détectée. Parlez après le démarrage de l’écoute puis réessayez.',
+        aborted: 'La dictée a été interrompue.',
+      };
+      setDiagnosticError(messages[event.error] || `La dictée a échoué (${event.error || 'erreur inconnue'}).`);
+    };
     recognition.onend = () => setListening(false);
     recognitionRef.current = recognition;
-    setDiagnosticError('');
-    setListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (error) {
+      setListening(false);
+      setDiagnosticError(`Impossible de démarrer la dictée (${error.name || 'erreur inconnue'}). Réessayez.`);
+    }
   }
 
   async function handlePreDiagnostic(event) {
     event.preventDefault();
     setDiagnosticError('');
     setDiagnosticResult(null);
-    if (!diagnosticPhoto) { setDiagnosticError('Prenez ou sélectionnez une photo de la zone concernée.'); return; }
-    if (diagnosticDescription.trim().length < 5) { setDiagnosticError('Décrivez le problème en quelques mots.'); return; }
+    if (countWords(diagnosticDescription) < 3) {
+      setDiagnosticError('L’observation doit contenir au moins 3 mots.');
+      return;
+    }
     const payload = new FormData();
     payload.append('animal_id', id);
-    payload.append('photo', diagnosticPhoto);
     payload.append('description', diagnosticDescription.trim());
     try {
       setDiagnosticLoading(true);
       const result = await api.preDiagnostic(payload);
       setDiagnosticResult(result);
-      setHistorique(previous => [{ id: `diag-${result.id}`, type: 'Pré-diagnostic IA', date: result.date_creation, title: 'Pré-diagnostic assisté par IA', desc: diagnosticDescription.trim() }, ...previous]);
+      setHistorique(previous => [{ id: `diag-${result.id}`, type: 'Pré-diagnostic IA', isIA: true, date: result.date_creation, title: 'Pré-diagnostic assisté par IA', desc: diagnosticDescription.trim(), diagnosticResult: result }, ...previous]);
     } catch (err) {
       setDiagnosticError(err.message || 'Le pré-diagnostic est indisponible.');
     } finally {
@@ -279,22 +323,25 @@ export default function DetailAnimal() {
           <div className="relative pl-1">
             <div className="timeline-line" />
             {historique.map((ev, i) => {
-              const isIA = ev.type === 'ia' || ev.type === 'IA';
+              const isIA = ev.isIA;
+              const isPreDiagnostic = isPreDiagnosticEvent(ev.title, ev.type);
               return (
                 <div key={ev.id || i} className={`relative pl-8 ${i < historique.length - 1 ? 'pb-5' : ''}`}>
                   <div className={`timeline-dot ${isIA ? 'timeline-dot-info' : ''}`} />
                   {isIA ? (
                     <div className="rounded-xl border border-[#E5E5E3] bg-[#F5F4F2] p-3">
-                      <div className="text-[10px] text-[#171310]/40">{ev.date}</div>
+                      <div className="text-[10px] text-[#171310]/40">{formatHistoryDate(ev.date)}</div>
                       <div className="mt-1 flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-[#5C3A21]" />
                         <span className="text-[13px] font-semibold text-[#5C3A21]">{ev.title}</span>
                       </div>
-                      <p className="mt-1 text-[12px] leading-relaxed text-[#171310]/70">{ev.desc}</p>
+                      {isPreDiagnostic
+                        ? <PreDiagnosticHistory description={ev.desc} result={ev.diagnosticResult} />
+                        : <p className="mt-1 text-[12px] leading-relaxed text-[#171310]/70">{ev.desc}</p>}
                     </div>
                   ) : (
                     <>
-                      <div className="text-[10px] text-[#171310]/40">{ev.date}</div>
+                      <div className="text-[10px] text-[#171310]/40">{formatHistoryDate(ev.date)}</div>
                       <div className="text-[13px] font-semibold text-[#171310] mt-0.5">{ev.title}</div>
                       <p className="text-[12px] text-[#171310]/60 mt-0.5">{ev.desc}</p>
                     </>
@@ -411,10 +458,9 @@ export default function DetailAnimal() {
           </div>
 
           <section className="mt-4 rounded-2xl border border-[#E5E5E3] bg-white p-5">
-            <div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-[#5C3A21]" /><div><h2 className="font-serif text-[18px] text-[#171310]">Pré-diagnostic avec IA</h2><p className="mt-1 text-[12px] text-[#171310]/55">Une photo, votre description (à l’oral ou au clavier), puis des pistes expliquées et des premières recommandations.</p></div></div>
-            {animal.presence === 'present' ? <form onSubmit={handlePreDiagnostic} className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-              <div><label htmlFor="diagnostic-photo" className="mb-2 block text-xs font-semibold">Photo du problème</label><input id="diagnostic-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required onChange={event => { const file = event.target.files?.[0] || null; setDiagnosticPhoto(file); setDiagnosticPhotoUrl(file ? URL.createObjectURL(file) : ''); }} className="w-full text-xs" />{diagnosticPhotoUrl && <img src={diagnosticPhotoUrl} alt="Photo pour le pré-diagnostic" className="mt-3 h-36 w-full rounded-lg object-cover" />}</div>
-              <div><label htmlFor="diagnostic-description" className="mb-2 block text-xs font-semibold">Que se passe-t-il ?</label><textarea id="diagnostic-description" value={diagnosticDescription} onChange={event => setDiagnosticDescription(event.target.value)} rows={4} maxLength={3000} required placeholder="Décrivez les signes observés…" className="w-full resize-y rounded-lg border border-[#E5E5E3] p-3 text-sm outline-none focus:border-[#5C3A21]" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => listening ? recognitionRef.current?.stop() : startVoiceDescription()} className="rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#5C3A21]">{listening ? 'Arrêter la dictée' : 'Décrire à l’oral'}</button><button type="submit" disabled={diagnosticLoading} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white disabled:opacity-60">{diagnosticLoading ? 'Analyse de la photo…' : 'Obtenir des pistes'}</button><span className="text-[11px] text-[#171310]/45">La photo et la description sont envoyées à l’IA pour analyse.</span></div>{diagnosticError && <p className="mt-2 text-xs text-red-600">{diagnosticError}</p>}</div>
+            <div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-[#5C3A21]" /><div><h2 className="font-serif text-[18px] text-[#171310]">Pré-diagnostic avec IA</h2><p className="mt-1 text-[12px] text-[#171310]/55">Saisissez ou dictez au moins 3 mots sur cet animal.</p></div></div>
+            {animal.presence === 'present' ? <form onSubmit={handlePreDiagnostic} className="mt-4">
+              <label htmlFor="diagnostic-description" className="mb-2 block text-xs font-semibold">Observations sur {label}</label><textarea id="diagnostic-description" value={diagnosticDescription} onChange={event => setDiagnosticDescription(event.target.value)} rows={4} maxLength={3000} required placeholder="Décrivez les signes observés…" className="w-full resize-y rounded-lg border border-[#E5E5E3] p-3 text-sm outline-none focus:border-[#5C3A21]" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => listening ? recognitionRef.current?.stop() : startVoiceDescription()} className="rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#5C3A21]">{listening ? 'Arrêter la dictée' : 'Dicter l’observation'}</button><button type="submit" disabled={diagnosticLoading} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white disabled:opacity-60">{diagnosticLoading ? 'Analyse en cours…' : 'Analyser'}</button><span className="text-[11px] text-[#171310]/45">La fiche de {label} est automatiquement prise en compte.</span></div>{diagnosticError && <p className="mt-2 text-xs text-red-600">{diagnosticError}</p>}
             </form> : <p className="mt-4 text-sm text-[#171310]/60">Un pré-diagnostic ne peut pas être demandé pour un animal vendu ou mort.</p>}
             {diagnosticResult && <div className="mt-5 rounded-xl border border-[#E5E5E3] bg-[#F8F7F5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Pistes à vérifier</h3><span className={`rounded-full px-3 py-1 text-xs font-semibold ${diagnosticResult.urgence === 'élevée' ? 'bg-red-100 text-red-700' : diagnosticResult.urgence === 'faible' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>Urgence {diagnosticResult.urgence}</span></div><div className="mt-3 grid gap-3 sm:grid-cols-2">{diagnosticResult.suggestions?.map((suggestion, index) => <article key={`${suggestion.nom}-${index}`} className="rounded-lg bg-white p-3"><h4 className="text-sm font-semibold">{suggestion.nom}</h4><p className="mt-1 text-xs leading-relaxed text-[#171310]/70">{suggestion.justification}</p>{suggestion.niveau && <p className="mt-1 text-[11px] text-[#171310]/50">Niveau : {suggestion.niveau}</p>}</article>)}</div><h4 className="mt-4 text-xs font-semibold">Premières recommandations</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#171310]/75">{diagnosticResult.recommandations?.map((recommendation, index) => <li key={index}>{recommendation}</li>)}</ul><p className="mt-3 border-t border-[#E5E5E3] pt-3 text-[11px] text-[#171310]/55">{diagnosticResult.limites} Cette aide ne remplace pas l’avis d’un vétérinaire.</p></div>}
           </section>
@@ -585,9 +631,11 @@ export default function DetailAnimal() {
                 ) : (
                   historique.slice(0, 2).map((ev, i) => (
                     <div key={ev.id || i} className={`${i > 0 ? 'pt-3' : ''} ${i < Math.min(historique.length, 2) - 1 ? 'pb-3 border-b border-[#E5E5E3]' : ''}`}>
-                      <div className="text-[11px] text-[#171310]/40">{ev.date}</div>
+                      <div className="text-[11px] text-[#171310]/40">{formatHistoryDate(ev.date)}</div>
                       <div className="text-[13px] font-semibold text-[#171310] mt-1">{ev.title}</div>
-                      {ev.desc && <div className="text-[12px] text-[#171310]/60 mt-0.5">{ev.desc}</div>}
+                      {ev.desc && (isPreDiagnosticEvent(ev.title, ev.type)
+                        ? <PreDiagnosticHistory description={ev.desc} result={ev.diagnosticResult} compact />
+                        : <div className="text-[12px] text-[#171310]/60 mt-0.5">{ev.desc}</div>)}
                     </div>
                   ))
                 )}

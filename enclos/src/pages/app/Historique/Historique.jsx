@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Search, ChevronDown, ChevronLeft, ChevronRight, Sparkles, History } from 'lucide-react';
 import api from '../../../API/api';
+import PreDiagnosticHistory from '../../../components/common/PreDiagnosticHistory';
+import { formatHistoryDate, isPreDiagnosticEvent } from '../../../utils/history';
 
 const selectCls =
   'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -198,16 +200,18 @@ export default function Historique() {
 
                 {ev.isIA ? (
                   <div className="rounded-xl border border-[#E5E5E3] bg-[#F5F4F2] p-4">
-                    <div className="text-[11px] text-[#171310]/40">{ev.date}</div>
+                    <div className="text-[11px] text-[#171310]/40">{formatHistoryDate(ev.date)}</div>
                     <div className="mt-1 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-[#5C3A21]" />
                       <span className="text-[14px] font-semibold text-[#5C3A21]">{ev.title}</span>
                     </div>
-                    <p className="mt-2 text-[13px] leading-relaxed text-[#171310]/70">{ev.desc}</p>
+                    {isPreDiagnosticEvent(ev.title, ev.type)
+                      ? <PreDiagnosticHistory description={ev.desc} />
+                      : <p className="mt-2 text-[13px] leading-relaxed text-[#171310]/70">{ev.desc}</p>}
                   </div>
                 ) : (
                   <>
-                    <div className="text-[11px] text-[#171310]/40">{ev.date}</div>
+                    <div className="text-[11px] text-[#171310]/40">{formatHistoryDate(ev.date)}</div>
                     <h3 className="text-[14px] font-semibold text-[#171310] mt-1">{ev.title}</h3>
                     <p className="mt-1 text-[13px] leading-relaxed text-[#171310]/60">{ev.desc}</p>
                   </>

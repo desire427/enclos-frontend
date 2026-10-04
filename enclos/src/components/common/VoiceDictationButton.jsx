@@ -1,6 +1,11 @@
 import { useRef, useState } from 'react';
 
-export default function VoiceDictationButton({ onTranscript }) {
+export default function VoiceDictationButton({
+  onTranscript,
+  buttonLabel = 'Dicter les médicaments et consignes',
+  helperText = 'Dictez les médicaments. Dites « instructions » ou « consignes » avant de dicter les consignes.',
+  containerClassName = 'sm:col-span-2',
+}) {
   const recognitionRef = useRef(null);
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState('');
@@ -42,11 +47,11 @@ export default function VoiceDictationButton({ onTranscript }) {
     }
   }
 
-  return <div className="sm:col-span-2">
+  return <div className={containerClassName}>
     <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : start} className="rounded-lg border border-[#5C3A21] px-3 py-2 text-xs font-medium text-[#5C3A21]">
-      {listening ? 'Arrêter la dictée' : 'Dicter les médicaments et consignes'}
+      {listening ? 'Arrêter la dictée' : buttonLabel}
     </button>
-    <p className="mt-1 text-[11px] text-[#171310]/50">Dictez les médicaments. Dites « instructions » ou « consignes » avant de dicter les consignes.</p>
+    <p className="mt-1 text-[11px] text-[#171310]/50">{helperText}</p>
     {message && <p role="status" className="mt-1 text-xs text-[#171310]/70">{message}</p>}
   </div>;
 }
