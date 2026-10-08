@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, PawPrint, Scale, Calendar, AlertTriangle,
+  ArrowLeft, PawPrint, Scale, Calendar, AlertTriangle, Camera, Circle, ImagePlus, LoaderCircle, Mic, MicOff, Send,
   Pencil, ChevronDown, Check, X, Sparkles, History,
   Bell,
 } from 'lucide-react';
@@ -75,13 +75,26 @@ export default function DetailAnimal() {
   const [suivisSante, setSuivisSante] = useState([]);
   const [showOrdonnanceForm, setShowOrdonnanceForm] = useState(false);
   const [ordonnanceError, setOrdonnanceError] = useState('');
+  const [ordonnanceOcrLoading, setOrdonnanceOcrLoading] = useState(false);
+  const [ordonnanceOcrMessage, setOrdonnanceOcrMessage] = useState('');
+  const [ordonnanceOcrError, setOrdonnanceOcrError] = useState('');
+  const [ordonnanceOcrPhoto, setOrdonnanceOcrPhoto] = useState(null);
+  const [showOrdonnanceCamera, setShowOrdonnanceCamera] = useState(false);
+  const [ordonnanceCameraStream, setOrdonnanceCameraStream] = useState(null);
+  const [ordonnanceCameraLoading, setOrdonnanceCameraLoading] = useState(false);
+  const [ordonnanceCameraReady, setOrdonnanceCameraReady] = useState(false);
+  const [ordonnanceCameraError, setOrdonnanceCameraError] = useState('');
   const [diagnosticDescription, setDiagnosticDescription] = useState('');
   const [diagnosticResult, setDiagnosticResult] = useState(null);
+  const [diagnosticConversation, setDiagnosticConversation] = useState([]);
+  const [diagnosticId, setDiagnosticId] = useState(null);
   const [diagnosticError, setDiagnosticError] = useState('');
   const [diagnosticLoading, setDiagnosticLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
   const ordonnanceFormRef = useRef(null);
+  const ordonnanceCameraVideoRef = useRef(null);
+  const ordonnanceCameraStreamRef = useRef(null);
 
   /* UI */
   const [loading,  setLoading]  = useState(false);
@@ -93,6 +106,16 @@ export default function DetailAnimal() {
   useEffect(() => {
     if (location.hash === '#sante') setActiveTab('Santé');
   }, [location.hash]);
+
+  useEffect(() => () => {
+    ordonnanceCameraStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
+
+  useEffect(() => {
+    if (showOrdonnanceCamera && ordonnanceCameraVideoRef.current && ordonnanceCameraStream) {
+      ordonnanceCameraVideoRef.current.srcObject = ordonnanceCameraStream;
+    }
+  }, [showOrdonnanceCamera, ordonnanceCameraStream]);
 
   /* Onglet Santé — champs éditables */
   const [presence,   setPresence]   = useState('present');
@@ -251,19 +274,29 @@ export default function DetailAnimal() {
   async function handlePreDiagnostic(event) {
     event.preventDefault();
     setDiagnosticError('');
-    setDiagnosticResult(null);
-    if (countWords(diagnosticDescription) < 3) {
-      setDiagnosticError('L’observation doit contenir au moins 3 mots.');
+    const continuing = Boolean(diagnosticId);
+    if (!continuing && !animal?.photo) {
+      setDiagnosticError('Ajoutez d’abord une photo à la fiche de cet animal.');
+      return;
+    }
+    if (countWords(diagnosticDescription) < (continuing ? 1 : 3)) {
+      setDiagnosticError(continuing ? 'Saisissez votre réponse pour continuer.' : 'L’observation doit contenir au moins 3 mots.');
       return;
     }
     const payload = new FormData();
     payload.append('animal_id', id);
     payload.append('description', diagnosticDescription.trim());
+    if (continuing) payload.append('diagnostic_id', String(diagnosticId));
     try {
       setDiagnosticLoading(true);
       const result = await api.preDiagnostic(payload);
       setDiagnosticResult(result);
-      setHistorique(previous => [{ id: `diag-${result.id}`, type: 'Pré-diagnostic IA', isIA: true, date: result.date_creation, title: 'Pré-diagnostic assisté par IA', desc: diagnosticDescription.trim(), diagnosticResult: result }, ...previous]);
+      setDiagnosticId(result.id);
+      setDiagnosticConversation(result.conversation || []);
+      setDiagnosticDescription('');
+      const transcript = (result.conversation || []).map(turn => `${turn.role === 'user' ? 'Éleveur' : 'IA'} : ${turn.content}`).join('\n');
+      const historyId = result.historique_evenement_id || `diag-${result.id}`;
+      setHistorique(previous => [{ id: historyId, type: 'Pré-diagnostic IA', isIA: true, date: result.date_creation, title: 'Pré-diagnostic assisté par IA', desc: transcript, diagnosticResult: result }, ...previous.filter(event => event.id !== historyId && event.id !== `diag-${result.id}`)]);
     } catch (err) {
       setDiagnosticError(err.message || 'Le pré-diagnostic est indisponible.');
     } finally {
@@ -280,17 +313,111 @@ export default function DetailAnimal() {
     if (split?.[1]) form.elements.namedItem('instructions').value = split[1].trim();
   }
 
+  async function extraireOrdonnancePhoto(photo) {
+    if (!photo) return;
+    setOrdonnanceOcrPhoto(photo);
+    setOrdonnanceOcrError('');
+    setOrdonnanceOcrMessage('Lecture de l’ordonnance en cours…');
+    try {
+      setOrdonnanceOcrLoading(true);
+      const extracted = await api.extraireOrdonnance(photo);
+      const form = ordonnanceFormRef.current;
+      ['titre', 'veterinaire', 'date_prescription', 'medicaments', 'instructions'].forEach(field => {
+        const input = form?.elements.namedItem(field);
+        if (input) input.value = extracted[field] || '';
+      });
+      setOrdonnanceOcrMessage(extracted.informations_a_verifier?.length
+        ? 'Extraction terminée. Certains champs sont illisibles ou absents : vérifiez-les et complétez-les avant d’enregistrer.'
+        : 'Extraction terminée. Vérifiez les données avant d’enregistrer.');
+    } catch (err) {
+      setOrdonnanceOcrError(err.message || 'Impossible de lire cette ordonnance.');
+      setOrdonnanceOcrMessage('Aucune donnée n’a été extraite. Vous pouvez réessayer avec une photo nette ou remplir les champs manuellement.');
+    } finally {
+      setOrdonnanceOcrLoading(false);
+    }
+  }
+
+  function handleOrdonnanceOcr(event) {
+    const photo = event.target.files?.[0];
+    event.target.value = '';
+    if (photo) extraireOrdonnancePhoto(photo);
+  }
+
+  async function ouvrirCameraOrdonnance() {
+    setOrdonnanceCameraError('');
+    setOrdonnanceCameraReady(false);
+    setShowOrdonnanceCamera(true);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setOrdonnanceCameraError('La caméra n’est pas disponible dans ce navigateur. Utilisez « Importer une image ».');
+      return;
+    }
+    try {
+      setOrdonnanceCameraLoading(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' } },
+      });
+      ordonnanceCameraStreamRef.current = stream;
+      setOrdonnanceCameraStream(stream);
+    } catch (error) {
+      const messages = {
+        NotAllowedError: 'L’accès à la caméra est refusé. Autorisez la caméra dans les réglages du navigateur.',
+        NotFoundError: 'Aucune caméra n’a été détectée. Vous pouvez importer une image à la place.',
+        NotReadableError: 'La caméra est occupée ou inaccessible. Fermez les autres applications qui l’utilisent.',
+        SecurityError: 'Le navigateur bloque la caméra. Utilisez localhost ou HTTPS.',
+      };
+      setOrdonnanceCameraError(messages[error.name] || `Impossible d’ouvrir la caméra (${error.name || 'erreur inconnue'}).`);
+    } finally {
+      setOrdonnanceCameraLoading(false);
+    }
+  }
+
+  function fermerCameraOrdonnance() {
+    ordonnanceCameraStreamRef.current?.getTracks().forEach(track => track.stop());
+    ordonnanceCameraStreamRef.current = null;
+    setOrdonnanceCameraStream(null);
+    setShowOrdonnanceCamera(false);
+    setOrdonnanceCameraReady(false);
+  }
+
+  async function capturerOrdonnance() {
+    const video = ordonnanceCameraVideoRef.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setOrdonnanceCameraError('La caméra n’est pas encore prête. Réessayez dans un instant.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const photo = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!photo) {
+      setOrdonnanceCameraError('Impossible de capturer la photo. Réessayez.');
+      return;
+    }
+    const imageFile = new File([photo], `ordonnance-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    fermerCameraOrdonnance();
+    extraireOrdonnancePhoto(imageFile);
+  }
+
   async function handleCreateOrdonnance(event) {
     event.preventDefault();
     setOrdonnanceError('');
     const form = event.currentTarget;
     const data = new FormData(form);
+    const selectedDocument = data.get('document');
+    if (ordonnanceOcrPhoto && (!selectedDocument || !selectedDocument.size)) {
+      data.set('document', ordonnanceOcrPhoto, ordonnanceOcrPhoto.name);
+    }
     data.append('animal', id);
     try {
       const created = await api.createOrdonnance(data);
       setOrdonnances(previous => [created, ...previous]);
       setShowOrdonnanceForm(false);
       form.reset();
+      setOrdonnanceOcrPhoto(null);
+      setOrdonnanceOcrMessage('');
+      setOrdonnanceOcrError('');
     } catch (err) {
       setOrdonnanceError(err.message || 'Impossible d’enregistrer cette ordonnance.');
     }
@@ -442,6 +569,23 @@ export default function DetailAnimal() {
             <section id="animal-ordonnances" className="rounded-2xl border border-[#E5E5E3] bg-white p-5">
               <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-[17px] text-[#171310]">Ordonnances</h2>{animal.presence === 'present' && <button type="button" onClick={() => setShowOrdonnanceForm(value => !value)} className="rounded-lg bg-[#5C3A21] px-3 py-2 text-xs font-medium text-white">{showOrdonnanceForm ? 'Fermer' : 'Ajouter'}</button>}</div>
               {showOrdonnanceForm && <form ref={ordonnanceFormRef} onSubmit={handleCreateOrdonnance} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={ouvrirCameraOrdonnance} disabled={ordonnanceOcrLoading || ordonnanceCameraLoading} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#5C3A21] px-3 py-2 text-xs font-medium text-[#5C3A21] hover:bg-[#F8F7F5] disabled:opacity-60">
+                      {ordonnanceCameraLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                      Prendre une photo
+                    </button>
+                    <label htmlFor="ordonnance-import" className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#171310] hover:bg-[#F8F7F5]">
+                      <ImagePlus className="h-4 w-4" />
+                      Importer une image
+                    </label>
+                    <input id="ordonnance-import" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleOrdonnanceOcr} disabled={ordonnanceOcrLoading} className="sr-only" />
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#171310]/50">La photo est transmise à Gemini pour extraction. Vérifiez les champs avant d’enregistrer.</p>
+                  {ordonnanceOcrMessage && <p role="status" className="mt-1 text-xs text-[#171310]/70">{ordonnanceOcrMessage}</p>}
+                  {ordonnanceOcrError && <p role="alert" className="mt-1 text-xs text-red-600">{ordonnanceOcrError}</p>}
+                  {ordonnanceCameraError && !showOrdonnanceCamera && <p role="alert" className="mt-1 text-xs text-red-600">{ordonnanceCameraError}</p>}
+                </div>
                 <input name="titre" required maxLength="150" placeholder="Titre de l’ordonnance" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
                 <input name="veterinaire" maxLength="150" placeholder="Vétérinaire" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
                 <input name="date_prescription" type="date" required defaultValue={new Date().toISOString().slice(0,10)} className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
@@ -453,16 +597,38 @@ export default function DetailAnimal() {
                 {ordonnanceError && <p className="text-xs text-red-600 sm:col-span-2">{ordonnanceError}</p>}
                 <button type="submit" className="h-10 rounded-lg bg-[#5C3A21] px-4 text-sm text-white sm:col-span-2">Enregistrer l’ordonnance</button>
               </form>}
+              {showOrdonnanceCamera && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation">
+                <section role="dialog" aria-modal="true" aria-labelledby="ordonnance-camera-title" className="w-full max-w-xl rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 id="ordonnance-camera-title" className="text-sm font-semibold">Photographier l’ordonnance</h3>
+                    <button type="button" onClick={fermerCameraOrdonnance} aria-label="Fermer la caméra" title="Fermer la caméra" className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-[#F5F4F2]"><X className="h-4 w-4" /></button>
+                  </div>
+                  <video ref={ordonnanceCameraVideoRef} autoPlay playsInline muted onLoadedMetadata={() => setOrdonnanceCameraReady(true)} className="aspect-video w-full rounded-lg bg-black object-contain" />
+                  {ordonnanceCameraError && <p role="alert" className="mt-2 text-xs text-red-600">{ordonnanceCameraError}</p>}
+                  <div className="mt-3 flex justify-end">
+                    <button type="button" onClick={capturerOrdonnance} disabled={!ordonnanceCameraReady || ordonnanceCameraLoading} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#5C3A21] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                      <Circle className="h-4 w-4" /> Capturer
+                    </button>
+                  </div>
+                </section>
+              </div>}
               {ordonnances.length ? <ul className="mt-4 divide-y divide-[#E5E5E3]">{ordonnances.map(ord => <li key={ord.id} className="py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{ord.titre}</p><p className="mt-1 text-xs text-[#171310]/60">{ord.date_prescription} · {ord.veterinaire || 'Vétérinaire non précisé'}</p><p className="mt-1 whitespace-pre-wrap text-xs">{ord.medicaments}</p></div>{ord.document && <a className="text-xs text-[#5C3A21] underline" href={ord.document} target="_blank" rel="noreferrer">Document</a>}</div></li>)}</ul> : <p className="mt-4 text-sm text-[#171310]/50">Aucune ordonnance enregistrée.</p>}
             </section>
           </div>
 
           <section className="mt-4 rounded-2xl border border-[#E5E5E3] bg-white p-5">
-            <div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-[#5C3A21]" /><div><h2 className="font-serif text-[18px] text-[#171310]">Pré-diagnostic avec IA</h2><p className="mt-1 text-[12px] text-[#171310]/55">Saisissez ou dictez au moins 3 mots sur cet animal.</p></div></div>
+            <div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-[#5C3A21]" /><div><h2 className="font-serif text-[18px] text-[#171310]">Pré-diagnostic avec IA</h2><p className="mt-1 text-[12px] text-[#171310]/55">Décrivez les premiers signes en au moins 3 mots, puis poursuivez l’échange avec l’IA.</p></div></div>
+            {diagnosticConversation.length > 0 && <div aria-live="polite" className="mt-4 space-y-3">
+              {diagnosticConversation.map((turn, index) => <article key={`${index}-${turn.role}`} className={`max-w-[90%] rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap ${turn.role === 'assistant' ? 'bg-[#F5F4F2] text-[#171310]' : 'ml-auto bg-[#5C3A21] text-white'}`}>
+                <p className="mb-1 text-[10px] font-semibold uppercase opacity-60">{turn.role === 'assistant' ? 'Assistant IA' : 'Vous'}</p>
+                {turn.content}
+              </article>)}
+              <button type="button" onClick={() => { setDiagnosticId(null); setDiagnosticConversation([]); setDiagnosticResult(null); setDiagnosticDescription(''); }} className="text-xs font-medium text-[#5C3A21] underline">Nouveau pré-diagnostic</button>
+            </div>}
             {animal.presence === 'present' ? <form onSubmit={handlePreDiagnostic} className="mt-4">
-              <label htmlFor="diagnostic-description" className="mb-2 block text-xs font-semibold">Observations sur {label}</label><textarea id="diagnostic-description" value={diagnosticDescription} onChange={event => setDiagnosticDescription(event.target.value)} rows={4} maxLength={3000} required placeholder="Décrivez les signes observés…" className="w-full resize-y rounded-lg border border-[#E5E5E3] p-3 text-sm outline-none focus:border-[#5C3A21]" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => listening ? recognitionRef.current?.stop() : startVoiceDescription()} className="rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#5C3A21]">{listening ? 'Arrêter la dictée' : 'Dicter l’observation'}</button><button type="submit" disabled={diagnosticLoading} className="rounded-lg bg-[#5C3A21] px-4 py-2 text-xs font-medium text-white disabled:opacity-60">{diagnosticLoading ? 'Analyse en cours…' : 'Analyser'}</button><span className="text-[11px] text-[#171310]/45">La fiche de {label} est automatiquement prise en compte.</span></div>{diagnosticError && <p className="mt-2 text-xs text-red-600">{diagnosticError}</p>}
+              <label htmlFor="diagnostic-description" className="mb-2 block text-xs font-semibold">{diagnosticId ? 'Votre réponse' : `Observations sur ${label}`}</label><textarea id="diagnostic-description" value={diagnosticDescription} onChange={event => setDiagnosticDescription(event.target.value)} rows={4} maxLength={3000} required placeholder={diagnosticId ? 'Répondez à la question de l’IA…' : 'Décrivez les signes observés…'} className="w-full resize-y rounded-lg border border-[#E5E5E3] p-3 text-sm outline-none focus:border-[#5C3A21]" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" title={listening ? 'Arrêter la dictée' : diagnosticId ? 'Dicter la réponse' : 'Dicter l’observation'} aria-label={listening ? 'Arrêter la dictée' : diagnosticId ? 'Dicter la réponse' : 'Dicter l’observation'} onClick={() => listening ? recognitionRef.current?.stop() : startVoiceDescription()} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#5C3A21] text-[#5C3A21]">{listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}</button><button type="submit" disabled={diagnosticLoading} title={diagnosticLoading ? 'Réponse en cours' : diagnosticId ? 'Envoyer la réponse' : 'Analyser le pré-diagnostic'} aria-label={diagnosticLoading ? 'Réponse en cours' : diagnosticId ? 'Envoyer la réponse' : 'Analyser le pré-diagnostic'} className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#5C3A21] text-white disabled:opacity-60">{diagnosticLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : diagnosticId ? <Send className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}</button><span className="text-[11px] text-[#171310]/45">{!diagnosticId && `La fiche de ${label} et sa photo seront prises en compte.`}</span></div>{diagnosticError && <p className="mt-2 text-xs text-red-600">{diagnosticError}</p>}
             </form> : <p className="mt-4 text-sm text-[#171310]/60">Un pré-diagnostic ne peut pas être demandé pour un animal vendu ou mort.</p>}
-            {diagnosticResult && <div className="mt-5 rounded-xl border border-[#E5E5E3] bg-[#F8F7F5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Pistes à vérifier</h3><span className={`rounded-full px-3 py-1 text-xs font-semibold ${diagnosticResult.urgence === 'élevée' ? 'bg-red-100 text-red-700' : diagnosticResult.urgence === 'faible' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>Urgence {diagnosticResult.urgence}</span></div><div className="mt-3 grid gap-3 sm:grid-cols-2">{diagnosticResult.suggestions?.map((suggestion, index) => <article key={`${suggestion.nom}-${index}`} className="rounded-lg bg-white p-3"><h4 className="text-sm font-semibold">{suggestion.nom}</h4><p className="mt-1 text-xs leading-relaxed text-[#171310]/70">{suggestion.justification}</p>{suggestion.niveau && <p className="mt-1 text-[11px] text-[#171310]/50">Niveau : {suggestion.niveau}</p>}</article>)}</div><h4 className="mt-4 text-xs font-semibold">Premières recommandations</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#171310]/75">{diagnosticResult.recommandations?.map((recommendation, index) => <li key={index}>{recommendation}</li>)}</ul><p className="mt-3 border-t border-[#E5E5E3] pt-3 text-[11px] text-[#171310]/55">{diagnosticResult.limites} Cette aide ne remplace pas l’avis d’un vétérinaire.</p></div>}
+            {diagnosticResult && Boolean(diagnosticResult.suggestions?.length || diagnosticResult.recommandations?.length) && <div className="mt-5 rounded-xl border border-[#E5E5E3] bg-[#F8F7F5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Pistes à vérifier</h3><span className={`rounded-full px-3 py-1 text-xs font-semibold ${diagnosticResult.urgence === 'élevée' ? 'bg-red-100 text-red-700' : diagnosticResult.urgence === 'faible' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>Urgence {diagnosticResult.urgence}</span></div><div className="mt-3 grid gap-3 sm:grid-cols-2">{diagnosticResult.suggestions?.map((suggestion, index) => <article key={`${suggestion.nom}-${index}`} className="rounded-lg bg-white p-3"><h4 className="text-sm font-semibold">{suggestion.nom}</h4><p className="mt-1 text-xs leading-relaxed text-[#171310]/70">{suggestion.justification}</p>{suggestion.niveau && <p className="mt-1 text-[11px] text-[#171310]/50">Niveau : {suggestion.niveau}</p>}</article>)}</div><h4 className="mt-4 text-xs font-semibold">Premières recommandations</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#171310]/75">{diagnosticResult.recommandations?.map((recommendation, index) => <li key={index}>{recommendation}</li>)}</ul><p className="mt-3 border-t border-[#E5E5E3] pt-3 text-[11px] text-[#171310]/55">{diagnosticResult.limites} Cette aide ne remplace pas l’avis d’un vétérinaire.</p></div>}
           </section>
 
           {/* Corps */}

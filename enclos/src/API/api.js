@@ -528,6 +528,14 @@ export const api = {
     return request(url, { method: 'POST', token: getStoredToken(), body: payload instanceof FormData ? payload : JSON.stringify(payload) });
   },
 
+  async extraireOrdonnance(photo) {
+    const payload = new FormData();
+    payload.append('photo', photo);
+    return request(`${SANTE_URL.replace('/sante', '/ordonnances')}/extraire/`, {
+      method: 'POST', token: getStoredToken(), body: payload,
+    });
+  },
+
   async updateOrdonnance(id, payload) {
     const url = `${SANTE_URL.replace('/sante', '/ordonnances')}/${id}/`;
     return request(url, { method: 'PATCH', token: getStoredToken(), body: payload instanceof FormData ? payload : JSON.stringify(payload) });
