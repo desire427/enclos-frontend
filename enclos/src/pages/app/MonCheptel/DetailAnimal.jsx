@@ -44,6 +44,47 @@ function normalizeEvent(h) {
   };
 }
 
+function isWeighingEvent(event) {
+  return String(event.type || '').toLocaleLowerCase('fr') === 'pesage';
+}
+
+function isHealthEvent(event) {
+  const type = String(event.type || '').toLocaleLowerCase('fr');
+  const title = String(event.title || '').toLocaleLowerCase('fr');
+  return ['santé', 'consultation', 'ordonnance', 'gestation'].includes(type)
+    || isPreDiagnosticEvent(event.title, event.type)
+    || title.includes('état de l’animal modifié');
+}
+
+function getWeightEventKey(dateValue, weight) {
+  return `${String(dateValue || '').slice(0, 10)}:${Number(weight)}`;
+}
+
+function getWeighingHistory(history, healthFollowUps) {
+  const weighingEvents = history.filter(isWeighingEvent);
+  const existingKeys = new Set(weighingEvents.flatMap(event => {
+    const weight = event.desc.match(/(?:Poids mesuré|Nouveau poids)\s*:\s*([\d.,]+)/i)?.[1]?.replace(',', '.');
+    return weight ? [getWeightEventKey(event.date, weight)] : [];
+  }));
+  const previousMeasurements = healthFollowUps
+    .filter(followUp => followUp.poids_kg !== null && followUp.poids_kg !== undefined)
+    .map(followUp => {
+      const date = followUp.date_debut || followUp.date_creation;
+      const weight = Number(followUp.poids_kg);
+      return {
+        id: `suivi-pesage-${followUp.id}`,
+        type: 'Pesage',
+        date,
+        title: 'Pesage enregistré',
+        desc: `Poids mesuré : ${weight} kg.`,
+        key: getWeightEventKey(date, weight),
+      };
+    })
+    .filter(measurement => !existingKeys.has(measurement.key))
+    .map(({ key, ...measurement }) => measurement);
+  return [...weighingEvents, ...previousMeasurements].sort((left, right) => new Date(right.date) - new Date(left.date));
+}
+
 /* Panneau latéral générique */
 function SidePanel({ open, onClose, title, children }) {
   return (
@@ -101,6 +142,7 @@ export default function DetailAnimal() {
   const [error,    setError]    = useState('');
   const [activeTab,setActiveTab]= useState(() => location.hash === '#sante' ? 'Santé' : 'Général');
   const [showHistorique,setShowHistorique]= useState(false);
+  const [historyFilter, setHistoryFilter] = useState('tout');
   const [showAlertes,   setShowAlertes]   = useState(false);
 
   useEffect(() => {
@@ -436,6 +478,12 @@ export default function DetailAnimal() {
   const label = a ? (a.nom?.trim() ? a.nom : a.numero_identification) : '…';
   const age   = a ? calcAge(a.date_naissance) : null;
   const nonLuesAlertes = alertes.filter(al => ['non_lue','Non lue'].includes(al.statut || '')).length;
+  const historiqueAffiche = (historyFilter === 'pesage'
+    ? getWeighingHistory(historique, suivisSante)
+    : historique.filter(event => (
+      historyFilter === 'sante' ? isHealthEvent(event)
+        : true
+    )));
 
   const NIVEAU_COLOR = { Critique: 'bg-red-600', Avertissement: 'bg-amber-500', Info: 'bg-blue-500' };
 
@@ -444,16 +492,23 @@ export default function DetailAnimal() {
 
       {/* ── Panneau Historique ── */}
       <SidePanel open={showHistorique} onClose={() => setShowHistorique(false)} title={`Historique — ${label}`}>
-        {historique.length === 0 ? (
-          <p className="text-[13px] text-[#171310]/40">Aucun événement enregistré.</p>
+        <div className="mb-5 grid grid-cols-3 gap-1 rounded-lg bg-[#F5F4F2] p-1" role="group" aria-label="Filtrer l’historique">
+          {[
+            ['tout', 'Tout'],
+            ['sante', 'Santé'],
+            ['pesage', 'Pesage'],
+          ].map(([value, label]) => <button key={value} type="button" aria-pressed={historyFilter === value} onClick={() => setHistoryFilter(value)} className={`min-h-9 rounded-md px-2 text-xs font-medium ${historyFilter === value ? 'bg-white text-[#5C3A21] shadow-sm' : 'text-[#171310]/60 hover:text-[#171310]'}`}>{label}</button>)}
+        </div>
+        {historiqueAffiche.length === 0 ? (
+          <p className="text-[13px] text-[#171310]/40">{historyFilter === 'pesage' ? 'Aucun pesage enregistré.' : historyFilter === 'sante' ? 'Aucun événement de santé enregistré.' : 'Aucun événement enregistré.'}</p>
         ) : (
           <div className="relative pl-1">
             <div className="timeline-line" />
-            {historique.map((ev, i) => {
+            {historiqueAffiche.map((ev, i) => {
               const isIA = ev.isIA;
               const isPreDiagnostic = isPreDiagnosticEvent(ev.title, ev.type);
               return (
-                <div key={ev.id || i} className={`relative pl-8 ${i < historique.length - 1 ? 'pb-5' : ''}`}>
+                <div key={ev.id || i} className={`relative pl-8 ${i < historiqueAffiche.length - 1 ? 'pb-5' : ''}`}>
                   <div className={`timeline-dot ${isIA ? 'timeline-dot-info' : ''}`} />
                   {isIA ? (
                     <div className="rounded-xl border border-[#E5E5E3] bg-[#F5F4F2] p-3">
