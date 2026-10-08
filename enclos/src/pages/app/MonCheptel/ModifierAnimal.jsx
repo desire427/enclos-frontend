@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Check, Plus } from 'lucide-react';
 import api from '../../../API/api';
+import FieldError from '../../../components/common/FieldError';
 import { clean, validateAnimal } from '../../../utils/validation';
 
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -51,7 +52,13 @@ export default function ModifierAnimal() {
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [numIdent, setNumIdent] = useState('');
+
+  function updateField(field, setter, event) {
+    setter(event.target.value);
+    setFieldErrors(previous => ({ ...previous, [field]: '' }));
+  }
 
   /* Chargement de l'animal */
   useEffect(() => {
@@ -102,8 +109,8 @@ export default function ModifierAnimal() {
     e.preventDefault();
     setError('');
     const validation = validateAnimal({ nom, espece, sexe, dateNaissance, poids, couleur, observations }, { requirePhoto: false });
+    setFieldErrors(validation.errors);
     if (validation.message) {
-      setError(validation.message);
       return;
     }
     try {
@@ -178,7 +185,8 @@ export default function ModifierAnimal() {
               <label htmlFor="nom" className="block text-[13px] font-semibold text-[#171310] mb-2">
                 Nom <span className="text-[#171310]/40 font-normal">(optionnel)</span>
               </label>
-              <input id="nom" type="text" placeholder="Ex: Django" value={nom} onChange={e => setNom(e.target.value)} className={inputCls} />
+              <input id="nom" type="text" placeholder="Ex: Django" value={nom} onChange={e => updateField('nom', setNom, e)} className={inputCls} />
+              <FieldError message={fieldErrors.nom} />
             </div>
           </div>
 
@@ -187,13 +195,14 @@ export default function ModifierAnimal() {
             <div>
               <label htmlFor="espece" className="block text-[13px] font-semibold text-[#171310] mb-2">Espèce</label>
               <div className="relative">
-                <select id="espece" className={selectCls} value={espece} onChange={e => setEspece(e.target.value)}>
+                <select id="espece" className={selectCls} value={espece} onChange={e => updateField('espece', setEspece, e)}>
                   {ESPECE_CHOICES.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
               </div>
+              <FieldError message={fieldErrors.espece} />
             </div>
             <div>
               <label htmlFor="race" className="block text-[13px] font-semibold text-[#171310] mb-2">Race</label>
@@ -217,17 +226,19 @@ export default function ModifierAnimal() {
               <label className="block text-[13px] font-semibold text-[#171310] mb-2">Sexe</label>
               <div className="flex gap-3">
                 {[['femelle', 'Femelle'], ['male', 'Mâle']].map(([v, lbl]) => (
-                  <button key={v} type="button" onClick={() => setSexe(v)}
+                  <button key={v} type="button" onClick={() => { setSexe(v); setFieldErrors(previous => ({ ...previous, sexe: '' })); }}
                     className={`flex-1 h-11 rounded-[10px] border flex items-center justify-center text-[13px] transition-all
                       ${sexe === v ? 'border-[#5C3A21] bg-[#F5F4F2] text-[#5C3A21] font-semibold' : 'border-[#DCDCD9] bg-white text-[#171310] hover:bg-[#F5F4F2]'}`}>
                     {lbl}
                   </button>
                 ))}
               </div>
+              <FieldError message={fieldErrors.sexe} />
             </div>
             <div>
               <label htmlFor="dateNaissance" className="block text-[13px] font-semibold text-[#171310] mb-2">Date de naissance</label>
-              <input id="dateNaissance" type="date" value={dateNaissance} onChange={e => setDateNaissance(e.target.value)} className={inputCls} />
+              <input id="dateNaissance" type="date" value={dateNaissance} onChange={e => updateField('dateNaissance', setDateNaissance, e)} className={inputCls} />
+              <FieldError message={fieldErrors.dateNaissance} />
             </div>
           </div>
 
@@ -235,13 +246,15 @@ export default function ModifierAnimal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
               <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids actuel (kg) <span className="text-red-600">*</span></label>
-              <input id="poids" type="number" step="0.1" min="0" max="6000" placeholder="0.00" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
+              <input id="poids" type="number" step="0.1" min="0" max="6000" placeholder="0.00" value={poids} onChange={e => updateField('poids', setPoids, e)} className={inputCls} />
+              <FieldError message={fieldErrors.poids} />
             </div>
             <div>
               <label htmlFor="couleur" className="block text-[13px] font-semibold text-[#171310] mb-2">
                 Couleur <span className="text-[#171310]/40 font-normal">(optionnel)</span>
               </label>
-              <input id="couleur" type="text" placeholder="Ex: Robe tachetée" value={couleur} onChange={e => setCouleur(e.target.value)} className={inputCls} />
+              <input id="couleur" type="text" placeholder="Ex: Robe tachetée" value={couleur} onChange={e => updateField('couleur', setCouleur, e)} className={inputCls} />
+              <FieldError message={fieldErrors.couleur} />
             </div>
           </div>
 
@@ -279,9 +292,10 @@ export default function ModifierAnimal() {
             </label>
             <textarea id="observations" rows={4}
               placeholder="Observations particulières…"
-              value={observations} onChange={e => setObservations(e.target.value)}
+              value={observations} onChange={e => updateField('observations', setObservations, e)}
               className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
             />
+            <FieldError message={fieldErrors.observations} />
           </div>
 
           <div className="mt-6 border-t border-[#E5E5E3]" />

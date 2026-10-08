@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Check, Trash2 } from 'lucide-react';
 import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
+import FieldError from '../../../components/common/FieldError';
 import { clean, validateSante } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -52,7 +53,13 @@ export default function ModifierSante() {
 
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showDelete, setShowDelete] = useState(false);
+
+  function updateField(field, setter, event) {
+    setter(event.target.value);
+    setFieldErrors(previous => ({ ...previous, [field]: '' }));
+  }
 
   /* Chargement en mode modification */
   useEffect(() => {
@@ -198,8 +205,8 @@ export default function ModifierSante() {
     setError('');
     if (animalArchived) { setError('Impossible de modifier un suivi ou rendez-vous pour un animal vendu ou mort.'); return; }
     const validation = validateSante({ animalId, statut, dateDebut, dateProchain, poidsKg, temperature, frequenceCardiaque, note }, isNew);
+    setFieldErrors(validation.errors);
     if (validation.message) {
-      setError(validation.message);
       return;
     }
     try {
@@ -262,7 +269,7 @@ export default function ModifierSante() {
       {error && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
 
       {animalArchived && <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Cet animal est vendu ou mort. Son suivi et son historique restent consultables, mais ne peuvent plus être modifiés.</div>}
-      {!animalArchived && <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+        {!animalArchived && <form noValidate onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
         {/* Animal (création uniquement) */}
         {isNew && (
@@ -270,7 +277,7 @@ export default function ModifierSante() {
             <p className="text-[11px] uppercase tracking-wide font-semibold text-[#171310]/50 mb-4">Animal</p>
             <label htmlFor="animal" className="block text-[13px] font-semibold text-[#171310] mb-2">Animal concerné</label>
             <div className="relative">
-              <select id="animal" className={selectCls} value={animalId} onChange={e => setAnimalId(e.target.value)} required>
+              <select id="animal" className={selectCls} value={animalId} onChange={e => updateField('animal', setAnimalId, e)} required>
                 <option value="">Sélectionner un animal</option>
                 {animalsLoading
                   ? <option disabled>Chargement…</option>
@@ -279,6 +286,7 @@ export default function ModifierSante() {
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
             </div>
+            <FieldError message={fieldErrors.animal} />
           </div>
         )}
 
@@ -299,7 +307,7 @@ export default function ModifierSante() {
           <div>
             <label className="block text-[13px] font-semibold text-[#171310] mb-2">Statut</label>
             <div className="relative">
-              <select value={statut} onChange={e => setStatut(e.target.value)} className={selectCls}>
+              <select value={statut} onChange={e => updateField('statut', setStatut, e)} className={selectCls}>
                 <option value="Malade">Malade</option>
                 <option value="En traitement">En traitement</option>
                 <option value="Guéri">Guéri</option>
@@ -307,12 +315,14 @@ export default function ModifierSante() {
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
             </div>
+            <FieldError message={fieldErrors.statut} />
           </div>
           <div>
             <label className="block text-[13px] font-semibold text-[#171310] mb-2">
               Date de début <span className="text-red-500">*</span>
             </label>
-            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} required className={inputCls} />
+            <input type="date" value={dateDebut} onChange={e => updateField('dateDebut', setDateDebut, e)} required className={inputCls} />
+            <FieldError message={fieldErrors.dateDebut} />
           </div>
         </div>
 
@@ -320,7 +330,8 @@ export default function ModifierSante() {
           <label className="block text-[13px] font-semibold text-[#171310] mb-2">
             Prochaine consultation <span className="text-[#171310]/40 font-normal">(optionnel)</span>
           </label>
-          <input type="date" value={dateProchain} onChange={e => setDateProchain(e.target.value)} className={inputCls} />
+            <input type="date" value={dateProchain} onChange={e => updateField('dateProchain', setDateProchain, e)} className={inputCls} />
+            <FieldError message={fieldErrors.dateProchain} />
         </div>
 
         <div className="mt-6">
@@ -329,15 +340,18 @@ export default function ModifierSante() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-[13px] font-semibold text-[#171310] mb-2">Poids (kg)</label>
-              <input type="number" min="0" step="0.1" value={poidsKg} onChange={e => setPoidsKg(e.target.value)} placeholder="Ex: 54.5" className={inputCls} />
+              <input type="number" min="0" step="0.1" value={poidsKg} onChange={e => updateField('poidsKg', setPoidsKg, e)} placeholder="Ex: 54.5" className={inputCls} />
+              <FieldError message={fieldErrors.poidsKg} />
             </div>
             <div>
               <label className="block text-[13px] font-semibold text-[#171310] mb-2">Température (°C)</label>
-              <input type="number" min="0" step="0.1" value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="Ex: 39.1" className={inputCls} />
+              <input type="number" min="0" step="0.1" value={temperature} onChange={e => updateField('temperature', setTemperature, e)} placeholder="Ex: 39.1" className={inputCls} />
+              <FieldError message={fieldErrors.temperature} />
             </div>
             <div>
               <label className="block text-[13px] font-semibold text-[#171310] mb-2">Fréquence cardiaque</label>
-              <input type="number" min="0" step="1" value={frequenceCardiaque} onChange={e => setFrequenceCardiaque(e.target.value)} placeholder="bpm" className={inputCls} />
+              <input type="number" min="0" step="1" value={frequenceCardiaque} onChange={e => updateField('frequenceCardiaque', setFrequenceCardiaque, e)} placeholder="bpm" className={inputCls} />
+              <FieldError message={fieldErrors.frequenceCardiaque} />
             </div>
           </div>
         </div>
@@ -347,10 +361,11 @@ export default function ModifierSante() {
           <textarea
             rows={4}
             value={note}
-            onChange={e => setNote(e.target.value)}
+            onChange={e => updateField('note', setNote, e)}
             placeholder="Observations, traitements, recommandations..."
             className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
+          <FieldError message={fieldErrors.note} />
         </div>
 
         <div className="mt-6 border-t border-[#E5E5E3]" />

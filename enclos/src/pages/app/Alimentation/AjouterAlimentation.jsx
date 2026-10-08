@@ -5,6 +5,7 @@ import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
 import useAlimRefs from '../../../hooks/useAlimRefs';
 import CreateSimpleModal from '../../../components/common/CreateSimpleModal';
+import FieldError from '../../../components/common/FieldError';
 import { clean, validateAlimentation } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -17,7 +18,7 @@ function animalOptionLabel(a) {
 }
 
 /* Sélecteur avec bouton "+" pour créer à la volée */
-function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, placeholder, required }) {
+function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, placeholder, required, error }) {
   return (
     <div>
       <label htmlFor={id} className="block text-[13px] font-semibold text-[#171310] mb-2">{label}</label>
@@ -49,6 +50,7 @@ function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, p
           <Plus className="w-4 h-4 text-[#5C3A21]" />
         </button>
       </div>
+      <FieldError message={error} />
     </div>
   );
 }
@@ -73,6 +75,12 @@ export default function AjouterAlimentation() {
   /* Soumission */
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function updateField(field, setter, event) {
+    setter(event.target.value);
+    setFieldErrors(previous => ({ ...previous, [field]: '' }));
+  }
 
   /* Créer un type d'aliment à la volée */
   async function handleCreateType(nom, description) {
@@ -92,8 +100,8 @@ export default function AjouterAlimentation() {
     e.preventDefault();
     setError('');
     const validation = validateAlimentation({ animal, typeAliment, frequence, quantite, date, note });
+    setFieldErrors(validation.errors);
     if (validation.message) {
-      setError(validation.message);
       return;
     }
     try {
@@ -128,7 +136,7 @@ export default function AjouterAlimentation() {
 
       {error && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+      <form noValidate onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
         {/* ── Animal ── */}
         <div className="mb-4">
@@ -138,7 +146,7 @@ export default function AjouterAlimentation() {
               id="animal"
               className={selectCls}
               value={animal}
-              onChange={e => setAnimal(e.target.value)}
+              onChange={e => updateField('animal', setAnimal, e)}
               required
             >
               <option value="">Sélectionner un animal</option>
@@ -151,6 +159,7 @@ export default function AjouterAlimentation() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
           </div>
+          <FieldError message={fieldErrors.animal} />
         </div>
 
         {/* ── Type d'aliment + Fréquence ── */}
@@ -165,6 +174,7 @@ export default function AjouterAlimentation() {
             onAdd={() => setShowTypeModal(true)}
             placeholder="Sélectionner"
             required
+            error={fieldErrors.typeAliment}
           />
           <SelectWithCreate
             id="frequence"
@@ -176,6 +186,7 @@ export default function AjouterAlimentation() {
             onAdd={() => setShowFreqModal(true)}
             placeholder="Sélectionner"
             required
+            error={fieldErrors.frequence}
           />
         </div>
 
@@ -190,10 +201,11 @@ export default function AjouterAlimentation() {
               step="0.1"
               min="0"
               value={quantite}
-              onChange={e => setQuantite(e.target.value)}
+              onChange={e => updateField('quantite', setQuantite, e)}
               required
               className={inputCls}
             />
+            <FieldError message={fieldErrors.quantite} />
           </div>
           <div>
             <label htmlFor="date" className="block text-[13px] font-semibold text-[#171310] mb-2">Date</label>
@@ -201,10 +213,11 @@ export default function AjouterAlimentation() {
               id="date"
               type="date"
               value={date}
-              onChange={e => setDate(e.target.value)}
+              onChange={e => updateField('date', setDate, e)}
               required
               className={inputCls}
             />
+            <FieldError message={fieldErrors.date} />
           </div>
         </div>
 
@@ -218,9 +231,10 @@ export default function AjouterAlimentation() {
             rows={3}
             placeholder="Observations particulières..."
             value={note}
-            onChange={e => setNote(e.target.value)}
+            onChange={e => updateField('note', setNote, e)}
             className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
+          <FieldError message={fieldErrors.note} />
         </div>
 
         <div className="mt-6 border-t border-[#E5E5E3]" />

@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
+import FieldError from './FieldError';
 import { clean, validateSimpleRecord } from '../../utils/validation';
 
 const inputCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -21,6 +22,7 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
   const [description, setDescription] = useState('');
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   if (!open) return null;
 
@@ -28,6 +30,7 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
     setNom('');
     setDescription('');
     setError('');
+    setFieldErrors({});
   }
 
   function handleClose() {
@@ -39,7 +42,8 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
   async function handleSubmit(e) {
     e.preventDefault();
     const validation = validateSimpleRecord(nom, description);
-    if (validation.message) { setError(validation.message); return; }
+    setFieldErrors(validation.errors);
+    if (validation.message) return;
     setError('');
     try {
       setSaving(true);
@@ -58,7 +62,7 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
       <div className="fixed inset-0 z-40 bg-black/30" onClick={handleClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl border border-[#E5E5E3] shadow-xl w-full max-w-[420px]">
-          <form onSubmit={handleSubmit}>
+          <form noValidate onSubmit={handleSubmit}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E5E3]">
               <h3 className="font-serif text-[17px] font-medium text-[#171310]">{title}</h3>
@@ -84,12 +88,13 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
                   type="text"
                   placeholder={placeholder}
                   value={nom}
-                  onChange={e => setNom(e.target.value)}
+                  onChange={e => { setNom(e.target.value); setFieldErrors(previous => ({ ...previous, nom: '' })); }}
                   disabled={saving}
                   required
                   autoFocus
                   className={inputCls}
                 />
+                <FieldError message={fieldErrors.nom} />
               </div>
 
               <div>
@@ -100,10 +105,11 @@ export default function CreateSimpleModal({ open, onClose, title, label, placeho
                   rows={2}
                   placeholder="Précisions supplémentaires…"
                   value={description}
-                  onChange={e => setDescription(e.target.value)}
+                  onChange={e => { setDescription(e.target.value); setFieldErrors(previous => ({ ...previous, description: '' })); }}
                   disabled={saving}
                   className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
                 />
+                <FieldError message={fieldErrors.description} />
               </div>
             </div>
 

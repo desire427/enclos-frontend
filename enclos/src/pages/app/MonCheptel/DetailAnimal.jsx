@@ -6,6 +6,7 @@ import {
   Bell,
 } from 'lucide-react';
 import api from '../../../API/api';
+import FieldError from '../../../components/common/FieldError';
 import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
 import PreDiagnosticHistory from '../../../components/common/PreDiagnosticHistory';
 import { formatHistoryDate, isPreDiagnosticEvent } from '../../../utils/history';
@@ -163,6 +164,7 @@ export default function DetailAnimal() {
   const [presence,   setPresence]   = useState('present');
   const [etatSante,  setEtatSante]  = useState('sain');
   const [noteSante,  setNoteSante]  = useState('');
+  const [santeFieldErrors, setSanteFieldErrors] = useState({});
   const [savingSante, setSavingSante] = useState(false);
 
   useEffect(() => {
@@ -222,13 +224,14 @@ export default function DetailAnimal() {
 
   async function handleSaveSante() {
     if (!animal || animal.presence !== 'present') return;
-    const validationError = validateSelect(presence, 'La présence', ['present', 'vendu', 'mort'])
-      || validateSelect(etatSante, "L'état de santé", ['sain', 'malade', 'gestation', 'en_traitement'])
-      || validateText(noteSante, 'La note de santé', { optional: true, max: 2000 });
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    const validationErrors = {
+      presence: validateSelect(presence, 'La présence', ['present', 'vendu', 'mort']),
+      etatSante: validateSelect(etatSante, "L'état de santé", ['sain', 'malade', 'gestation', 'en_traitement']),
+      noteSante: validateText(noteSante, 'La note de santé', { optional: true, max: 2000 }),
+    };
+    setSanteFieldErrors(validationErrors);
+    if (Object.values(validationErrors).some(Boolean)) return;
+    setError('');
     try {
       setSavingSante(true);
       const observations = clean(noteSante);
@@ -741,20 +744,21 @@ export default function DetailAnimal() {
                   <div>
                     <div className="text-[11px] uppercase tracking-wide text-[#171310]/40 font-medium mb-2">Présence</div>
                     <div className="relative">
-                      <select value={presence} onChange={e => setPresence(e.target.value)} className={selectCls}>
+                      <select value={presence} onChange={e => { setPresence(e.target.value); setSanteFieldErrors(previous => ({ ...previous, presence: '' })); }} className={selectCls}>
                         <option value="present">Présent</option>
                         <option value="vendu">Vendu</option>
                         <option value="mort">Mort</option>
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
                     </div>
+                    <FieldError message={santeFieldErrors.presence} />
                   </div>
 
                   {/* État de santé */}
                   <div>
                     <div className="text-[11px] uppercase tracking-wide text-[#171310]/40 font-medium mb-2">État de santé</div>
                     <div className="relative">
-                      <select value={etatSante} onChange={e => setEtatSante(e.target.value)} className={selectCls}>
+                      <select value={etatSante} onChange={e => { setEtatSante(e.target.value); setSanteFieldErrors(previous => ({ ...previous, etatSante: '' })); }} className={selectCls}>
                         <option value="sain">Sain</option>
                         <option value="malade">Malade</option>
                         <option value="gestation">Gestation</option>
@@ -762,15 +766,17 @@ export default function DetailAnimal() {
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
                     </div>
+                    <FieldError message={santeFieldErrors.etatSante} />
                   </div>
 
                   {/* Notes */}
                   <div className="sm:col-span-2">
                     <div className="text-[11px] uppercase tracking-wide text-[#171310]/40 font-medium mb-2">Notes de santé</div>
-                    <textarea rows={4} value={noteSante} onChange={e => setNoteSante(e.target.value)}
+                    <textarea rows={4} value={noteSante} onChange={e => { setNoteSante(e.target.value); setSanteFieldErrors(previous => ({ ...previous, noteSante: '' })); }}
                       placeholder="Observations, traitements en cours…"
                       className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
                     />
+                    <FieldError message={santeFieldErrors.noteSante} />
                   </div>
 
                   <div className="sm:col-span-2 flex justify-end">

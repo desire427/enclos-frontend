@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, Check, Trash2 } from 'lucide-react';
 import api from '../../../API/api';
 import useAnimals from '../../../hooks/useAnimals';
+import FieldError from '../../../components/common/FieldError';
 import { clean, validateGestation } from '../../../utils/validation';
 
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
@@ -39,7 +40,13 @@ export default function ModifierGestation() {
   /* États UI */
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showDelete, setShowDelete] = useState(false);
+
+  function updateField(field, setter, event) {
+    setter(event.target.value);
+    setFieldErrors(previous => ({ ...previous, [field]: '' }));
+  }
 
   /* Chargement en mode modification */
   useEffect(() => {
@@ -68,8 +75,8 @@ export default function ModifierGestation() {
     e.preventDefault();
     setError('');
     const validation = validateGestation({ animalId, statut, dateDebut, datePrevue, dateMiseBas, dureeJours, nombreNaissances, note }, isNew);
+    setFieldErrors(validation.errors);
     if (validation.message) {
-      setError(validation.message);
       return;
     }
     try {
@@ -134,7 +141,7 @@ export default function ModifierGestation() {
 
       {error && <div className="mt-4 text-red-600 text-[13px]">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
+      <form noValidate onSubmit={handleSubmit} className="mt-6 w-full max-w-[560px] rounded-2xl border border-[#E5E5E3] bg-white p-6">
 
         {/* Sélection de l'animal (création uniquement) */}
         {isNew && (
@@ -147,7 +154,7 @@ export default function ModifierGestation() {
                   id="animal"
                   className={selectCls}
                   value={animalId}
-                  onChange={e => setAnimalId(e.target.value)}
+                  onChange={e => updateField('animal', setAnimalId, e)}
                   required
                 >
                   <option value="">Sélectionner un animal</option>
@@ -160,6 +167,7 @@ export default function ModifierGestation() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
               </div>
+              <FieldError message={fieldErrors.animal} />
             </div>
           </div>
         )}
@@ -171,13 +179,14 @@ export default function ModifierGestation() {
         <div className="mb-4">
           <label className="block text-[13px] font-semibold text-[#171310] mb-2">Statut</label>
           <div className="relative">
-            <select value={statut} onChange={e => setStatut(e.target.value)} className={selectCls}>
+            <select value={statut} onChange={e => updateField('statut', setStatut, e)} className={selectCls}>
               <option>En cours</option>
               <option>Imminente</option>
               <option>Terminée</option>
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
           </div>
+          <FieldError message={fieldErrors.statut} />
         </div>
 
         {/* Mâle reproducteur */}
@@ -212,10 +221,11 @@ export default function ModifierGestation() {
             <input
               type="date"
               value={dateDebut}
-              onChange={e => setDateDebut(e.target.value)}
+              onChange={e => updateField('dateDebut', setDateDebut, e)}
               required
               className={inputCls}
             />
+            <FieldError message={fieldErrors.dateDebut} />
           </div>
           <div>
             <label className="block text-[13px] font-semibold text-[#171310] mb-2">
@@ -224,10 +234,11 @@ export default function ModifierGestation() {
             <input
               type="date"
               value={datePrevue}
-              onChange={e => setDatePrevue(e.target.value)}
+              onChange={e => updateField('datePrevue', setDatePrevue, e)}
               required
               className={inputCls}
             />
+            <FieldError message={fieldErrors.datePrevue} />
           </div>
         </div>
 
@@ -240,9 +251,10 @@ export default function ModifierGestation() {
             <input
               type="date"
               value={dateMiseBas}
-              onChange={e => setDateMiseBas(e.target.value)}
+              onChange={e => updateField('dateMiseBas', setDateMiseBas, e)}
               className={inputCls}
             />
+            <FieldError message={fieldErrors.dateMiseBas} />
           </div>
           <div>
             <label className="block text-[13px] font-semibold text-[#171310] mb-2">
@@ -252,10 +264,11 @@ export default function ModifierGestation() {
               type="number"
               min="0"
               value={dureeJours}
-              onChange={e => setDureeJours(e.target.value)}
+              onChange={e => updateField('dureeJours', setDureeJours, e)}
               placeholder="Ex : 150"
               className={inputCls}
             />
+            <FieldError message={fieldErrors.dureeJours} />
           </div>
         </div>
 
@@ -268,10 +281,11 @@ export default function ModifierGestation() {
             type="number"
             min="0"
             value={nombreNaissances}
-            onChange={e => setNombreNaissances(e.target.value)}
+            onChange={e => updateField('nombreNaissances', setNombreNaissances, e)}
             placeholder="Ex : 2"
             className={inputCls}
           />
+          <FieldError message={fieldErrors.nombreNaissances} />
         </div>
 
         {/* Notes */}
@@ -280,10 +294,11 @@ export default function ModifierGestation() {
           <textarea
             rows={4}
             value={note}
-            onChange={e => setNote(e.target.value)}
+            onChange={e => updateField('note', setNote, e)}
             placeholder="Observations, recommandations vétérinaires..."
             className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
+          <FieldError message={fieldErrors.note} />
         </div>
 
         <div className="border-t border-[#E5E5E3]" />

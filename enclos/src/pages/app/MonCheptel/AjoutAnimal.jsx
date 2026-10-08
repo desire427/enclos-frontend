@@ -4,13 +4,14 @@ import { ArrowLeft, ChevronDown, Check, Plus, X, Wheat } from 'lucide-react';
 import api from '../../../API/api';
 import useAlimRefs from '../../../hooks/useAlimRefs';
 import CreateSimpleModal from '../../../components/common/CreateSimpleModal';
+import FieldError from '../../../components/common/FieldError';
 import VoiceDictationButton from '../../../components/common/VoiceDictationButton';
 import { clean, validateAnimal, validateDate, validateNumber, validateSimpleRecord } from '../../../utils/validation';
 
 const inputCls  = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
 const selectCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 pr-10 text-[13px] text-[#171310] outline-none focus:border-[#5C3A21] transition-colors appearance-none';
 
-function SelectField({ id, label, children, value, onChange, required }) {
+function SelectField({ id, label, children, value, onChange, required, error }) {
   return (
     <div>
       {label && <label htmlFor={id} className="block text-[13px] font-semibold text-[#171310] mb-2">{label}</label>}
@@ -20,12 +21,13 @@ function SelectField({ id, label, children, value, onChange, required }) {
         </select>
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#171310]/50" />
       </div>
+      <FieldError message={error} />
     </div>
   );
 }
 
 /* Sélecteur avec bouton "+" pour créer à la volée */
-function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, placeholder }) {
+function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, placeholder, error }) {
   return (
     <div>
       <label htmlFor={id} className="block text-[13px] font-semibold text-[#171310] mb-2">{label}</label>
@@ -51,6 +53,7 @@ function SelectWithCreate({ id, label, value, onChange, items, loading, onAdd, p
           <Plus className="w-4 h-4 text-[#5C3A21]" />
         </button>
       </div>
+      <FieldError message={error} />
     </div>
   );
 }
@@ -207,6 +210,7 @@ export default function AjoutAnimal() {
   const [newRaceDesc,    setNewRaceDesc]    = useState('');
   const [creatingRace,   setCreatingRace]   = useState(false);
   const [raceModalError, setRaceModalError] = useState('');
+  const [raceFieldErrors, setRaceFieldErrors] = useState({});
 
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [showFreqModal, setShowFreqModal] = useState(false);
@@ -214,6 +218,13 @@ export default function AjoutAnimal() {
   /* ── Soumission ── */
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [alimErrors, setAlimErrors] = useState({});
+
+  function updateField(field, setter, event, setErrors = setFieldErrors) {
+    setter(event.target.value);
+    setErrors(previous => ({ ...previous, [field]: '' }));
+  }
 
   /* Charger les races selon l'espèce */
   useEffect(() => {
@@ -301,7 +312,8 @@ export default function AjoutAnimal() {
   async function handleCreateRace(e) {
     e.preventDefault();
     const validation = validateSimpleRecord(newRaceNom, newRaceDesc);
-    if (validation.message) { setRaceModalError(validation.message); return; }
+    setRaceFieldErrors(validation.errors);
+    if (validation.message) return;
     setRaceModalError('');
     try {
       setCreatingRace(true);
@@ -337,16 +349,20 @@ export default function AjoutAnimal() {
     e.preventDefault();
     setError('');
     const animalValidation = validateAnimal({ photo, nom, espece, sexe, dateNaissance, poids, couleur, observations });
+    setFieldErrors(animalValidation.errors);
     if (animalValidation.message) {
-      setError(animalValidation.message);
       return;
     }
     if (withAlim) {
-      const alimError = !alimType ? "Le type d'aliment est obligatoire." : !alimQte ? 'La quantité est obligatoire.' : validateNumber(alimQte, 'La quantité', { positive: true, max: 100000, decimals: 2 }) || validateDate(alimDate, 'La date', { notFuture: true });
-      if (alimError) {
-        setError(alimError);
-        return;
-      }
+      const nextAlimErrors = {
+        alimType: !alimType ? "Le type d'aliment est obligatoire." : '',
+        alimQte: !alimQte ? 'La quantité est obligatoire.' : validateNumber(alimQte, 'La quantité', { positive: true, max: 100000, decimals: 2 }),
+        alimDate: validateDate(alimDate, 'La date', { notFuture: true }),
+      };
+      setAlimErrors(nextAlimErrors);
+      if (Object.values(nextAlimErrors).some(Boolean)) return;
+    } else {
+      setAlimErrors({});
     }
     try {
       setSaving(true);
@@ -438,12 +454,13 @@ export default function AjoutAnimal() {
           <label htmlFor="nom" className="block text-[13px] font-semibold text-[#171310] mb-2">
             Nom <span className="text-[#171310]/40 font-normal">(optionnel)</span>
           </label>
-          <input id="nom" type="text" placeholder="Ex: Django" value={nom} onChange={e => setNom(e.target.value)} className={inputCls} />
+          <input id="nom" type="text" placeholder="Ex: Django" value={nom} onChange={e => updateField('nom', setNom, e)} className={inputCls} />
+          <FieldError message={fieldErrors.nom} />
         </div>
 
         {/* Espèce + Race */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <SelectField id="espece" label="Espèce" value={espece} onChange={e => setEspece(e.target.value)} required>
+          <SelectField id="espece" label="Espèce" value={espece} onChange={e => updateField('espece', setEspece, e)} required error={fieldErrors.espece}>
             {ESPECE_CHOICES.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
@@ -476,13 +493,14 @@ export default function AjoutAnimal() {
           <label className="block text-[13px] font-semibold text-[#171310] mb-2">Sexe</label>
           <div className="flex gap-3">
             {[['femelle', 'Femelle'], ['male', 'Mâle']].map(([v, lbl]) => (
-              <button key={v} type="button" onClick={() => setSexe(v)}
+              <button key={v} type="button" onClick={() => { setSexe(v); setFieldErrors(previous => ({ ...previous, sexe: '' })); }}
                 className={`flex-1 h-11 rounded-[10px] border flex items-center justify-center text-[13px] transition-all
                   ${sexe === v ? 'border-[#5C3A21] bg-[#F5F4F2] text-[#5C3A21] font-semibold' : 'border-[#DCDCD9] bg-white text-[#171310] hover:bg-[#F5F4F2]'}`}>
                 {lbl}
               </button>
             ))}
           </div>
+          <FieldError message={fieldErrors.sexe} />
         </div>
 
         {/* ── Données physiques ── */}
@@ -491,18 +509,21 @@ export default function AjoutAnimal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="dateNaissance" className="block text-[13px] font-semibold text-[#171310] mb-2">Date de naissance</label>
-              <input id="dateNaissance" type="date" value={dateNaissance} onChange={e => setDateNaissance(e.target.value)} className={inputCls} />
+              <input id="dateNaissance" type="date" value={dateNaissance} onChange={e => updateField('dateNaissance', setDateNaissance, e)} className={inputCls} />
+              <FieldError message={fieldErrors.dateNaissance} />
             </div>
             <div>
               <label htmlFor="poids" className="block text-[13px] font-semibold text-[#171310] mb-2">Poids actuel (kg) <span className="text-red-600">*</span></label>
-              <input id="poids" type="number" placeholder="0.00" step="0.1" min="0" max="6000" value={poids} onChange={e => setPoids(e.target.value)} className={inputCls} />
+              <input id="poids" type="number" placeholder="0.00" step="0.1" min="0" max="6000" value={poids} onChange={e => updateField('poids', setPoids, e)} className={inputCls} />
+              <FieldError message={fieldErrors.poids} />
             </div>
           </div>
           <div className="mt-4">
             <label htmlFor="couleur" className="block text-[13px] font-semibold text-[#171310] mb-2">
               Couleur <span className="text-[#171310]/40 font-normal">(optionnel)</span>
             </label>
-            <input id="couleur" type="text" placeholder="Ex: Robe tachetée noire et blanche" value={couleur} onChange={e => setCouleur(e.target.value)} className={inputCls} />
+            <input id="couleur" type="text" placeholder="Ex: Robe tachetée noire et blanche" value={couleur} onChange={e => updateField('couleur', setCouleur, e)} className={inputCls} />
+            <FieldError message={fieldErrors.couleur} />
           </div>
         </div>
 
@@ -528,9 +549,10 @@ export default function AjoutAnimal() {
         <div className="mt-4">
           <label htmlFor="observations" className="block text-[13px] font-semibold text-[#171310] mb-2">Notes additionnelles</label>
           <textarea id="observations" rows={3} placeholder="Observations particulières, antécédents..."
-            value={observations} onChange={e => setObservations(e.target.value)}
+            value={observations} onChange={e => updateField('observations', setObservations, e)}
             className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
           />
+          <FieldError message={fieldErrors.observations} />
         </div>
 
         {/* ── Alimentation initiale (optionnelle) ── */}
@@ -556,11 +578,12 @@ export default function AjoutAnimal() {
                   id="alimType"
                   label="Type d'aliment"
                   value={alimType}
-                  onChange={e => setAlimType(e.target.value)}
+                  onChange={e => updateField('alimType', setAlimType, e, setAlimErrors)}
                   items={typeAliments}
                   loading={refsLoading}
                   onAdd={() => setShowTypeModal(true)}
                   placeholder="Sélectionner"
+                  error={alimErrors.alimType}
                 />
                 <SelectWithCreate
                   id="alimFreq"
@@ -578,11 +601,13 @@ export default function AjoutAnimal() {
                 <div>
                   <label htmlFor="alimQte" className="block text-[13px] font-semibold text-[#171310] mb-2">Quantité (kg)</label>
                   <input id="alimQte" type="number" placeholder="Ex: 12.5" step="0.1" min="0"
-                    value={alimQte} onChange={e => setAlimQte(e.target.value)} className={inputCls} />
+                    value={alimQte} onChange={e => updateField('alimQte', setAlimQte, e, setAlimErrors)} className={inputCls} />
+                  <FieldError message={alimErrors.alimQte} />
                 </div>
                 <div>
                   <label htmlFor="alimDate" className="block text-[13px] font-semibold text-[#171310] mb-2">Date</label>
-                  <input id="alimDate" type="date" value={alimDate} onChange={e => setAlimDate(e.target.value)} className={inputCls} />
+                  <input id="alimDate" type="date" value={alimDate} onChange={e => updateField('alimDate', setAlimDate, e, setAlimErrors)} className={inputCls} />
+                  <FieldError message={alimErrors.alimDate} />
                 </div>
               </div>
             </div>
@@ -610,7 +635,7 @@ export default function AjoutAnimal() {
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => !creatingRace && setShowRaceModal(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl border border-[#E5E5E3] shadow-xl w-full max-w-[440px]">
-              <form onSubmit={handleCreateRace}>
+              <form noValidate onSubmit={handleCreateRace}>
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E5E3]">
                   <h3 className="font-serif text-[17px] font-medium text-[#171310]">Créer une nouvelle race</h3>
                   <button type="button" onClick={() => !creatingRace && setShowRaceModal(false)} disabled={creatingRace}
@@ -630,18 +655,20 @@ export default function AjoutAnimal() {
                       Nom de la race <span className="text-red-500">*</span>
                     </label>
                     <input id="newRaceNom" type="text" placeholder="Ex: Saanen, Holstein, Ndama…"
-                      value={newRaceNom} onChange={e => setNewRaceNom(e.target.value)}
+                      value={newRaceNom} onChange={e => { setNewRaceNom(e.target.value); setRaceFieldErrors(previous => ({ ...previous, nom: '' })); }}
                       required disabled={creatingRace} autoFocus className={inputCls} />
+                    <FieldError message={raceFieldErrors.nom} />
                   </div>
                   <div>
                     <label htmlFor="newRaceDesc" className="block text-[13px] font-semibold text-[#171310] mb-2">
                       Description <span className="text-[#171310]/40 font-normal">(optionnel)</span>
                     </label>
                     <textarea id="newRaceDesc" rows={2} placeholder="Caractéristiques, origine…"
-                      value={newRaceDesc} onChange={e => setNewRaceDesc(e.target.value)}
+                      value={newRaceDesc} onChange={e => { setNewRaceDesc(e.target.value); setRaceFieldErrors(previous => ({ ...previous, description: '' })); }}
                       disabled={creatingRace}
                       className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
                     />
+                    <FieldError message={raceFieldErrors.description} />
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E5E3]">

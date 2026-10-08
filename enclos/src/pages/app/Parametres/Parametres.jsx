@@ -6,6 +6,7 @@ import {
   MapPin, Ruler, FileText, Map,
 } from 'lucide-react';
 import api from '../../../API/api';
+import FieldError from '../../../components/common/FieldError';
 import { clean, validateEmail, validateFarm, validateName, validatePassword, validatePhone } from '../../../utils/validation';
 
 const inputCls = 'h-11 w-full rounded-lg border border-[#E5E5E3] bg-white px-3 text-[13px] text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors';
@@ -79,6 +80,9 @@ export default function Parametres() {
   const [error, setError] = useState('');
   const [profileError, setProfileError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [profileFieldErrors, setProfileFieldErrors] = useState({});
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState({});
+  const [farmFieldErrors, setFarmFieldErrors] = useState({});
 
   useEffect(() => {
     let alive = true;
@@ -140,19 +144,26 @@ export default function Parametres() {
 
   /* ── Handlers ── */
   function saveProfile() {
-    const profileErrorMessage = validateName(nom, 'Le nom complet', { min: 3, max: 100 }) || validateEmail(email) || validatePhone(tel);
-    setProfileError(profileErrorMessage);
-    if (profileErrorMessage) return;
+    const validationErrors = {
+      nom: validateName(nom, 'Le nom complet', { min: 3, max: 100 }),
+      email: validateEmail(email),
+      tel: validatePhone(tel),
+    };
+    setProfileFieldErrors(validationErrors);
+    setProfileError('');
+    if (Object.values(validationErrors).some(Boolean)) return;
     setProfSaved(true);
     setTimeout(() => setProfSaved(false), 2500);
   }
 
   function savePwd() {
-    const passwordErrorMessage = !oldPwd
-      ? 'Le mot de passe actuel est obligatoire.'
-      : validatePassword(newPwd, 'Le nouveau mot de passe');
-    setPasswordError(passwordErrorMessage);
-    if (passwordErrorMessage) return;
+    const validationErrors = {
+      oldPwd: oldPwd ? '' : 'Le mot de passe actuel est obligatoire.',
+      newPwd: validatePassword(newPwd, 'Le nouveau mot de passe'),
+    };
+    setPasswordFieldErrors(validationErrors);
+    setPasswordError('');
+    if (Object.values(validationErrors).some(Boolean)) return;
     setPwdSaved(true);
     setOldPwd(''); setNewPwd('');
     setTimeout(() => setPwdSaved(false), 2500);
@@ -160,8 +171,9 @@ export default function Parametres() {
 
   async function addFerme() {
     const validation = validateFarm(newFerme);
+    setFarmFieldErrors(validation.errors);
+    setError('');
     if (validation.message) {
-      setError(validation.message);
       return;
     }
 
@@ -191,6 +203,7 @@ export default function Parametres() {
 
       setFermes(mappedFarms);
       setNewFerme({ nom: '', localisation: '', superficie: '', description: '', coordonneesGPS: '' });
+      setFarmFieldErrors({});
       setShowPanel(false);
       setError('');
     } catch (err) {
@@ -268,10 +281,11 @@ export default function Parametres() {
                   <input
                     type="text"
                     value={nom}
-                    onChange={e => setNom(e.target.value)}
+                    onChange={e => { setNom(e.target.value); setProfileFieldErrors(previous => ({ ...previous, nom: '' })); }}
                     className={`${inputCls} pl-9`}
                   />
                 </div>
+                <FieldError message={profileFieldErrors.nom} />
               </Field>
 
               <Field label="Rôle">
@@ -286,10 +300,11 @@ export default function Parametres() {
                   <input
                     type="email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => { setEmail(e.target.value); setProfileFieldErrors(previous => ({ ...previous, email: '' })); }}
                     className={`${inputCls} pl-9`}
                   />
                 </div>
+                <FieldError message={profileFieldErrors.email} />
               </Field>
 
               <Field label="Téléphone">
@@ -300,10 +315,11 @@ export default function Parametres() {
                   <input
                     type="tel"
                     value={tel}
-                    onChange={e => setTel(e.target.value)}
+                    onChange={e => { setTel(e.target.value); setProfileFieldErrors(previous => ({ ...previous, tel: '' })); }}
                     className="flex-1 px-3 text-[13px] text-[#171310] bg-transparent outline-none"
                   />
                 </div>
+                <FieldError message={profileFieldErrors.tel} />
               </Field>
             </div>
           </div>
@@ -331,7 +347,7 @@ export default function Parametres() {
                 <input
                   type={showOld ? 'text' : 'password'}
                   value={oldPwd}
-                  onChange={e => setOldPwd(e.target.value)}
+                  onChange={e => { setOldPwd(e.target.value); setPasswordFieldErrors(previous => ({ ...previous, oldPwd: '' })); }}
                   placeholder="••••••••"
                   className="flex-1 text-[13px] text-[#171310] bg-transparent outline-none"
                 />
@@ -339,6 +355,7 @@ export default function Parametres() {
                   {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <FieldError message={passwordFieldErrors.oldPwd} />
             </Field>
 
             <Field label="Nouveau mot de passe">
@@ -347,7 +364,7 @@ export default function Parametres() {
                 <input
                   type={showNew ? 'text' : 'password'}
                   value={newPwd}
-                  onChange={e => setNewPwd(e.target.value)}
+                  onChange={e => { setNewPwd(e.target.value); setPasswordFieldErrors(previous => ({ ...previous, newPwd: '' })); }}
                   placeholder="Minimum 8 caractères"
                   className="flex-1 text-[13px] text-[#171310] bg-transparent outline-none"
                 />
@@ -355,6 +372,7 @@ export default function Parametres() {
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <FieldError message={passwordFieldErrors.newPwd} />
             </Field>
           </div>
 
@@ -479,10 +497,11 @@ export default function Parametres() {
                 autoFocus
                 placeholder="Ex: Ferme du Sahel"
                 value={newFerme.nom}
-                onChange={e => setNewFerme(f => ({ ...f, nom: e.target.value }))}
+                onChange={e => { setNewFerme(f => ({ ...f, nom: e.target.value })); setFarmFieldErrors(previous => ({ ...previous, nom: '' })); }}
                 className={`${inputCls} pl-9`}
               />
             </div>
+            <FieldError message={farmFieldErrors.nom} />
           </Field>
 
           {/* Localisation */}
@@ -493,10 +512,11 @@ export default function Parametres() {
                 type="text"
                 placeholder="Ex: Ziguinchor, Sénégal"
                 value={newFerme.localisation}
-                onChange={e => setNewFerme(f => ({ ...f, localisation: e.target.value }))}
+                onChange={e => { setNewFerme(f => ({ ...f, localisation: e.target.value })); setFarmFieldErrors(previous => ({ ...previous, localisation: '' })); }}
                 className={`${inputCls} pl-9`}
               />
             </div>
+            <FieldError message={farmFieldErrors.localisation} />
           </Field>
 
           {/* Superficie */}
@@ -509,10 +529,11 @@ export default function Parametres() {
                 step="0.1"
                 placeholder="Ex: 8.5"
                 value={newFerme.superficie}
-                onChange={e => setNewFerme(f => ({ ...f, superficie: e.target.value }))}
+                onChange={e => { setNewFerme(f => ({ ...f, superficie: e.target.value })); setFarmFieldErrors(previous => ({ ...previous, superficie: '' })); }}
                 className={`${inputCls} pl-9`}
               />
             </div>
+            <FieldError message={farmFieldErrors.superficie} />
           </Field>
 
           {/* Coordonnées GPS */}
@@ -523,10 +544,11 @@ export default function Parametres() {
                 type="text"
                 placeholder="Ex: 14.7922, -16.9523"
                 value={newFerme.coordonneesGPS}
-                onChange={e => setNewFerme(f => ({ ...f, coordonneesGPS: e.target.value }))}
+                onChange={e => { setNewFerme(f => ({ ...f, coordonneesGPS: e.target.value })); setFarmFieldErrors(previous => ({ ...previous, coordonneesGPS: '' })); }}
                 className={`${inputCls} pl-9`}
               />
             </div>
+            <FieldError message={farmFieldErrors.coordonneesGPS} />
           </Field>
 
           {/* Description */}
@@ -537,10 +559,11 @@ export default function Parametres() {
                 rows={3}
                 placeholder="Activité principale, particularités..."
                 value={newFerme.description}
-                onChange={e => setNewFerme(f => ({ ...f, description: e.target.value }))}
+                onChange={e => { setNewFerme(f => ({ ...f, description: e.target.value })); setFarmFieldErrors(previous => ({ ...previous, description: '' })); }}
                 className="w-full resize-none rounded-lg border border-[#E5E5E3] bg-white pl-9 pr-3 py-2.5 text-[13px] leading-relaxed text-[#171310] outline-none placeholder:text-[#171310]/40 focus:border-[#5C3A21] transition-colors"
               />
             </div>
+            <FieldError message={farmFieldErrors.description} />
           </Field>
         </div>
 
