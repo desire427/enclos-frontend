@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, PawPrint, Scale, Calendar, AlertTriangle, Camera, Circle, ImagePlus, LoaderCircle, Mic, MicOff, Send,
-  Pencil, ChevronDown, Check, X, Sparkles, History,
+  Pencil, ChevronDown, Check, X, Sparkles, History, Paperclip,
   Bell,
 } from 'lucide-react';
 import api from '../../../API/api';
@@ -121,6 +121,7 @@ export default function DetailAnimal() {
   const [ordonnanceOcrMessage, setOrdonnanceOcrMessage] = useState('');
   const [ordonnanceOcrError, setOrdonnanceOcrError] = useState('');
   const [ordonnanceOcrPhoto, setOrdonnanceOcrPhoto] = useState(null);
+  const [ordonnanceDocumentName, setOrdonnanceDocumentName] = useState('');
   const [showOrdonnanceCamera, setShowOrdonnanceCamera] = useState(false);
   const [ordonnanceCameraStream, setOrdonnanceCameraStream] = useState(null);
   const [ordonnanceCameraLoading, setOrdonnanceCameraLoading] = useState(false);
@@ -461,6 +462,7 @@ export default function DetailAnimal() {
       setShowOrdonnanceForm(false);
       form.reset();
       setOrdonnanceOcrPhoto(null);
+      setOrdonnanceDocumentName('');
       setOrdonnanceOcrMessage('');
       setOrdonnanceOcrError('');
     } catch (err) {
@@ -474,6 +476,28 @@ export default function DetailAnimal() {
       setAlertes(prev => prev.map(a => a.id === alerteId ? updated : a));
     } catch (err) {
       setError(err.message || 'Impossible de marquer l’alerte comme lue.');
+    }
+  }
+
+  async function handleConfirmerRappel(alerteId) {
+    try {
+      const updated = await api.confirmerRappelAlerte(alerteId);
+      setAlertes(previous => previous.map(alerte => (
+        alerte.rappel_ordonnance === updated.rappel_ordonnance
+          ? { ...alerte, statut: 'lue' }
+          : alerte.id === alerteId ? updated : alerte
+      )));
+    } catch (err) {
+      setError(err.message || 'Impossible de confirmer cette prise.');
+    }
+  }
+
+  async function handleFinishTreatment(ordonnanceId, traitementId) {
+    try {
+      const updated = await api.terminerTraitementOrdonnance(ordonnanceId, traitementId);
+      setOrdonnances(previous => previous.map(item => item.id === updated.id ? updated : item));
+    } catch (err) {
+      setError(err.message || 'Impossible de terminer ce médicament.');
     }
   }
 
@@ -556,6 +580,11 @@ export default function DetailAnimal() {
                     </span>
                   </div>
                   <p className="mt-2 text-[13px] leading-relaxed text-[#171310]/70">{al.message}</p>
+                  {al.rappel_ordonnance && al.rappel_actif && (
+                    <button onClick={() => handleConfirmerRappel(al.id)} className="mt-3 mr-4 text-[11px] font-semibold text-emerald-700 hover:underline">
+                      Confirmer la prise
+                    </button>
+                  )}
                   {['non_lue', 'Non lue'].includes(al.statut) && (
                     <button onClick={() => handleMarkAlerteLue(al.id)} className="mt-3 text-[11px] font-medium text-[#5C3A21] hover:underline">
                       Marquer comme lu
@@ -648,7 +677,14 @@ export default function DetailAnimal() {
                 <input name="veterinaire" maxLength="150" placeholder="Vétérinaire" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
                 <input name="date_prescription" type="date" required defaultValue={new Date().toISOString().slice(0,10)} className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm" />
                 <select name="suivi_sante" defaultValue="" className="h-10 rounded-lg border border-[#E5E5E3] px-3 text-sm"><option value="">Lier à un suivi santé (facultatif)</option>{suivisSante.map(suivi => <option key={suivi.id} value={suivi.id}>{suivi.statut} — {suivi.date_debut || `Suivi #${suivi.id}`}</option>)}</select>
-                <input name="document" type="file" accept="application/pdf,image/*" className="text-xs" />
+                <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                  <label htmlFor="animal-ordonnance-document" className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-[#E5E5E3] px-3 py-2 text-xs font-medium text-[#171310] hover:bg-[#F8F7F5]">
+                    <Paperclip className="h-4 w-4" />
+                    Joindre un document
+                  </label>
+                  <input id="animal-ordonnance-document" name="document" type="file" accept="application/pdf,image/*" onChange={event => setOrdonnanceDocumentName(event.target.files?.[0]?.name || '')} className="sr-only" />
+                  {ordonnanceDocumentName && <span className="max-w-full truncate text-xs text-[#171310]/60">{ordonnanceDocumentName}</span>}
+                </div>
                 <textarea name="medicaments" required maxLength="5000" placeholder="Médicaments prescrits" className="min-h-20 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
                 <VoiceDictationButton onTranscript={applyOrdonnanceDictation} />
                 <textarea name="instructions" maxLength="5000" placeholder="Instructions du vétérinaire" className="min-h-16 rounded-lg border border-[#E5E5E3] p-3 text-sm sm:col-span-2" />
@@ -670,7 +706,7 @@ export default function DetailAnimal() {
                   </div>
                 </section>
               </div>}
-              {ordonnances.length ? <ul className="mt-4 divide-y divide-[#E5E5E3]">{ordonnances.map(ord => <li key={ord.id} className="py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{ord.titre}</p><p className="mt-1 text-xs text-[#171310]/60">{ord.date_prescription} · {ord.veterinaire || 'Vétérinaire non précisé'}</p><p className="mt-1 whitespace-pre-wrap text-xs">{ord.medicaments}</p></div>{ord.document && <a className="text-xs text-[#5C3A21] underline" href={ord.document} target="_blank" rel="noreferrer">Document</a>}</div></li>)}</ul> : <p className="mt-4 text-sm text-[#171310]/50">Aucune ordonnance enregistrée.</p>}
+              {ordonnances.length ? <ul className="mt-4 divide-y divide-[#E5E5E3]">{ordonnances.map(ord => <li key={ord.id} className="py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{ord.titre}</p><p className="mt-1 text-xs text-[#171310]/60">{ord.date_prescription} · {ord.veterinaire || 'Vétérinaire non précisé'}</p><p className="mt-1 whitespace-pre-wrap text-xs">{ord.medicaments}</p>{ord.instructions && <p className="mt-2 whitespace-pre-wrap text-xs text-[#171310]/70"><span className="font-semibold">Instructions du vétérinaire :</span> {ord.instructions}</p>}{ord.traitements?.length > 0 && <ul className="mt-3 space-y-2 border-l-2 border-[#E5E5E3] pl-3">{ord.traitements.map(traitement => <li key={traitement.id} className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">{traitement.medicament} <span className={`font-normal ${traitement.actif ? 'text-emerald-700' : 'text-[#171310]/45'}`}>· {traitement.actif ? 'En cours' : 'Terminé'}</span></p><p className="whitespace-pre-wrap text-xs text-[#171310]/60">{traitement.posologie}</p>{traitement.heures_prise?.length > 0 && <p className="text-[11px] text-[#171310]/55">Heures : {traitement.heures_prise.join(', ')}</p>}</div>{traitement.actif && <button type="button" onClick={() => handleFinishTreatment(ord.id, traitement.id)} className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-emerald-700 px-2.5 text-[11px] font-medium text-emerald-800 hover:bg-emerald-50"><Check className="h-3.5 w-3.5" />Terminer ce médicament</button>}</li>)}</ul>}</div>{ord.document && <a className="text-xs text-[#5C3A21] underline" href={ord.document} target="_blank" rel="noreferrer">Document</a>}</div></li>)}</ul> : <p className="mt-4 text-sm text-[#171310]/50">Aucune ordonnance enregistrée.</p>}
             </section>
           </div>
 

@@ -528,6 +528,13 @@ export const api = {
     return request(url, { method: 'POST', token: getStoredToken(), body: payload instanceof FormData ? payload : JSON.stringify(payload) });
   },
 
+  async terminerTraitementOrdonnance(ordonnanceId, traitementId) {
+    return request(`${SANTE_URL.replace('/sante', '/ordonnances')}/${ordonnanceId}/traitements/${traitementId}/terminer/`, {
+      method: 'POST',
+      token: getStoredToken(),
+    });
+  },
+
   async extraireOrdonnance(photo) {
     const payload = new FormData();
     payload.append('photo', photo);
@@ -926,6 +933,13 @@ export const api = {
       method: 'PATCH', // Méthode HTTP PATCH pour mise à jour partielle
       token: getStoredToken(), // Utilise le token d'accès stocké pour l'authentification
       body: payload instanceof FormData ? payload : JSON.stringify(payload), // Corps de la requête
+    });
+  },
+
+  async confirmerRappelAlerte(id) {
+    return request(`${ALERTES_URL}/${id}/confirmer/`, {
+      method: 'POST',
+      token: getStoredToken(),
     });
   },
 

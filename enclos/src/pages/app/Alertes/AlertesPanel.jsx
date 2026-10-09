@@ -27,6 +27,8 @@ function normalize(a) {
     message:   a.message || '',
     conseil:   a.conseil || a.recommendation || '',
     statut:    a.statut || 'lue',
+    rappelOrdonnance: a.rappel_ordonnance || null,
+    rappelActif: a.rappel_actif === true,
     animalIdentification: a.animal_identification || a.animal?.numero_identification || '',
     animalNom: a.animal_nom || a.animal?.nom || '',
   };
@@ -36,7 +38,7 @@ function normalize(a) {
 /* Composant panneau alertes                                            */
 /* Les alertes sont passées en props depuis AppHeader via l'API réelle */
 /* ------------------------------------------------------------------ */
-export default function AlertesPanel({ open, onClose, alertes, onMarkOne, onMarkAll }) {
+export default function AlertesPanel({ open, onClose, alertes, onMarkOne, onMarkDone, onMarkAll }) {
   const nonLues = alertes.filter(a => {
     const s = (a.statut || '').toLowerCase();
     return s === 'non lue' || s === 'non_lue';
@@ -149,6 +151,17 @@ export default function AlertesPanel({ open, onClose, alertes, onMarkOne, onMark
                               {a.conseil}
                             </p>
                           </div>
+                        )}
+
+                        {a.rappelOrdonnance && a.rappelActif && (
+                          <button
+                            type="button"
+                            onClick={() => onMarkDone(a.id)}
+                            className="mt-2.5 mr-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 hover:underline transition-colors"
+                          >
+                            <CheckCheck className="w-3 h-3" />
+                            Confirmer la prise
+                          </button>
                         )}
 
                         {nonLue && (

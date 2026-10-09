@@ -9,15 +9,21 @@ export default function AppHeader({ onMenuOpen }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
     async function load() {
       try {
         const data = await api.getAlertes();
-        setAlertes(Array.isArray(data) ? data : []);
+        if (active) setAlertes(Array.isArray(data) ? data : []);
       } catch (err) {
-        setError(err.message || 'Impossible de charger les alertes.');
+        if (active) setError(err.message || 'Impossible de charger les alertes.');
       }
     }
     load();
+    const intervalId = setInterval(load, 30000);
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -45,6 +51,19 @@ export default function AppHeader({ onMenuOpen }) {
       setAlertes(prev => prev.map(a => a.id === id ? updated : a));
     } catch (err) {
       setError(err.message || 'Impossible de mettre à jour l’alerte.');
+    }
+  }
+
+  async function handleConfirmReminder(id) {
+    try {
+      const updated = await api.confirmerRappelAlerte(id);
+      setAlertes(prev => prev.map(alert => (
+        alert.rappel_ordonnance === updated.rappel_ordonnance
+          ? { ...alert, statut: 'lue' }
+          : alert.id === id ? updated : alert
+      )));
+    } catch (err) {
+      setError(err.message || 'Impossible de confirmer cette prise.');
     }
   }
 
@@ -86,7 +105,7 @@ export default function AppHeader({ onMenuOpen }) {
       </header>
 
       {error && <div className="hidden">{error}</div>}
-      <AlertesPanel open={panelOpen} onClose={() => setPanelOpen(false)} alertes={alertes} onMarkOne={handleMarkOne} onMarkAll={handleMarkAll} />
+      <AlertesPanel open={panelOpen} onClose={() => setPanelOpen(false)} alertes={alertes} onMarkOne={handleMarkOne} onMarkDone={handleConfirmReminder} onMarkAll={handleMarkAll} />
     </>
   );
 }
