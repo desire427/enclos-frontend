@@ -106,12 +106,18 @@ export default function DiagnosticIA() {
         </div>
       </form>
 
+      {result && (result.validation_image?.espece || result.validation_image?.observations) && <section aria-live="polite" className="mt-5 rounded-xl border border-[#E5E5E3] bg-white p-5">
+        <h2 className="font-serif text-[19px] text-[#171310]">Lecture de l’image</h2>
+        {result.validation_image?.espece && <p className="mt-2 text-xs text-[#171310]/60">Espèce reconnue : {result.validation_image.espece}.</p>}
+        {result.validation_image?.observations && <p className="mt-2 text-xs leading-relaxed text-[#171310]/70">Éléments visibles : {result.validation_image.observations}</p>}
+        <p className="mt-3 text-[11px] text-[#171310]/55">Ces observations visuelles ne constituent pas un diagnostic vétérinaire.</p>
+      </section>}
+
       {result && Boolean(result.suggestions?.length || result.recommandations?.length) && <section aria-live="polite" className="mt-5 rounded-xl border border-[#E5E5E3] bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-serif text-[19px] text-[#171310]">Pistes à vérifier</h2>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${result.urgence === 'élevée' ? 'bg-red-100 text-red-700' : result.urgence === 'faible' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>Urgence {result.urgence}</span>
         </div>
-        {result.validation_image?.espece && <p className="mt-2 text-xs text-[#171310]/60">Photo vérifiée : {result.validation_image.espece}.</p>}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">{result.suggestions?.map((suggestion, index) => <article key={`${suggestion.nom}-${index}`} className="rounded-lg border border-[#E5E5E3] p-3"><h3 className="text-sm font-semibold">{suggestion.nom}</h3><p className="mt-1 text-xs leading-relaxed text-[#171310]/70">{suggestion.justification}</p>{suggestion.niveau && <p className="mt-1 text-[11px] text-[#171310]/50">Niveau : {suggestion.niveau}</p>}</article>)}</div>
         <h3 className="mt-5 text-xs font-semibold">Premières recommandations</h3>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#171310]/75">{result.recommandations?.map((recommendation, index) => <li key={index}>{recommendation}</li>)}</ul>

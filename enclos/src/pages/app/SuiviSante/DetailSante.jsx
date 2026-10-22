@@ -322,7 +322,7 @@ export default function DetailSante() {
               </label>
               <input id="sante-ordonnance-import" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleOrdonnanceOcr} disabled={ordonnanceOcrLoading} className="sr-only" />
             </div>
-            <p className="mt-1 text-[11px] text-[#171310]/50">La photo est transmise à Gemini pour extraction. Vérifiez les champs avant d’enregistrer.</p>
+            <p className="mt-1 text-[11px] text-[#171310]/50">L’image sera transmise à Gemini. Les champs détectés seront remplis automatiquement ; vérifiez-les avant d’enregistrer.</p>
             {ordonnanceOcrMessage && <p role="status" className="mt-1 text-xs text-[#171310]/70">{ordonnanceOcrMessage}</p>}
             {ordonnanceOcrError && <p role="alert" className="mt-1 text-xs text-red-600">{ordonnanceOcrError}</p>}
             {ordonnanceCameraError && !showOrdonnanceCamera && <p role="alert" className="mt-1 text-xs text-red-600">{ordonnanceCameraError}</p>}
